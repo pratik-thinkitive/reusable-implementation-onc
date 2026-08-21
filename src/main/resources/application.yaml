@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: qrdaC1
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/onc}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+fhir:
+  base-url: ${FHIR_BASE_URL:http://localhost:8081/fhir}
+
+# Upstream EHR provider API. Vendor-neutral keys and placeholder hosts — point
+# these at whichever EHR backs the deployment.
+#
+# The defaults below are PLACEHOLDERS and do not resolve. Every deployment must
+# set EHR_API_BASE_URL and EHR_TOKEN_URL (and the credentials) in the environment.
+ehr:
+  api:
+    base-url: ${EHR_API_BASE_URL:https://provider.staging.ehr/apis/v1}
+  token:
+    url: ${EHR_TOKEN_URL:https://provider.staging.ehr/apis/v1/oauth/token}
+    client-auth: ${EHR_CLIENT_AUTH:}
+    username: ${EHR_USERNAME:}
+    password: ${EHR_PASSWORD:}
+    grant-type: ${EHR_GRANT_TYPE:password}
+
+# Vendor identity written into the generated QRDA XML header.
+# Deployment-specific — set these per installation.
+qrda:
+  vendor:
+    # quoted at the YAML level so the trailing space in the default survives
+    manufacturer-model-name: '${QRDA_MANUFACTURER_MODEL_NAME:EHR }'
+    software-name: ${QRDA_SOFTWARE_NAME:EHR}
+  custodian:
+    organization-name: ${QRDA_CUSTODIAN_ORG_NAME:EHR Test Deck}
+  legal-authenticator:
+    organization-name: ${QRDA_LEGAL_AUTH_ORG_NAME:EHR}
