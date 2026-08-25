@@ -14,6 +14,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * The one place this application talks to the EHR provider API.
@@ -33,6 +35,14 @@ public class EHRDataServiceImpl implements EHRDataService {
 
     @Value("${ehr.api.base-url}")
     private String apiBaseUrl;
+
+    /** Organisation whose clinics are enumerated when listing providers. */
+    @Value("${ehr.organisation-id:0}")
+    private int defaultOrganisationId;
+
+    /** Page size used when listing providers for a clinic. */
+    @Value("${ehr.provider-page-size:50}")
+    private int providerPageSize;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -240,6 +250,126 @@ public class EHRDataServiceImpl implements EHRDataService {
         } catch (Exception e) {
             log.error("Failed to fetch SOAP details", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    // ---------------------------------------------------------------- directory reads
+
+    @Override
+    public ResponseEntity<Clinic> fetchClinicDetails(int clinicId) {
+        try {
+            ResponseEntity<String> response = get(apiBaseUrl + "/clinic/" + clinicId);
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return ResponseEntity.status(response.getStatusCode()).body(null);
+            }
+
+            ClinicResponse clinicResponse = objectMapper.readValue(response.getBody(), ClinicResponse.class);
+
+            if (clinicResponse.getData() == null) {
+                return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
+            }
+
+            return ResponseEntity.ok(clinicResponse.getData());
+
+        } catch (Exception e) {
+            log.error("Failed to fetch clinic details for clinicId {}", clinicId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    @Override
+    public ResponseEntity<List<Clinic>> fetchAllClinicsByOrganisationId(int organisationId) {
+        try {
+            if (organisationId <= 0) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            ResponseEntity<String> response =
+                    get(apiBaseUrl + "/branch/organisation/" + organisationId + "/get-all-clinics");
+
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                return ResponseEntity.status(response.getStatusCode()).build();
+            }
+
+            ClinicListResponse clinicResponse = objectMapper.readValue(response.getBody(), ClinicListResponse.class);
+
+            if (clinicResponse.getData() == null
+                    || clinicResponse.getData().getClinics() == null
+                    || clinicResponse.getData().getClinics().isEmpty()) {
+                return ResponseEntity.noContent().build();
+            }
+
+            return ResponseEntity.ok(clinicResponse.getData().getClinics());
+
+        } catch (Exception e) {
+            log.error("Failed to fetch clinics for organisationId {}", organisationId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Lists providers across the configured organisation's clinics, de-duplicated by doctor id.
+     *
+     * <p>Note the parameter is used only for logging: the original implementation enumerated
+     * every clinic in the organisation rather than the one requested, and that behaviour is
+     * carried over unchanged. The organisation is now configuration rather than a literal.
+     */
+    @Override
+    public ResponseEntity<List<DoctorDetailsData>> fetchAllDoctorsByClinicId(String clinicId) {
+        try {
+            if (clinicId == null || clinicId.isBlank()) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            List<Clinic> allClinics = fetchAllClinicsByOrganisationId(defaultOrganisationId).getBody();
+
+            if (allClinics == null || allClinics.isEmpty()) {
+                log.warn("No clinics found for organisationId {}", defaultOrganisationId);
+                return ResponseEntity.noContent().build();
+            }
+
+            List<DoctorDetailsData> allDoctors = new ArrayList<>();
+
+            for (Clinic clinic : allClinics) {
+                String currentClinicId = String.valueOf(clinic.getClinic_id());
+                String url = UriComponentsBuilder.fromUriString(apiBaseUrl)
+                        .path("/doctor")
+                        .queryParam("clinicId", currentClinicId)
+                        .queryParam("size", providerPageSize)
+                        .toUriString();
+
+                ResponseEntity<String> response = get(url);
+
+                if (!response.getStatusCode().is2xxSuccessful()) {
+                    log.warn("EHR API returned {} for clinicId {}", response.getStatusCode(), currentClinicId);
+                    continue;
+                }
+
+                DoctorListResponse doctorResponse =
+                        objectMapper.readValue(response.getBody(), DoctorListResponse.class);
+
+                if (doctorResponse != null && doctorResponse.getData() != null
+                        && doctorResponse.getData().getDoctors() != null) {
+                    allDoctors.addAll(doctorResponse.getData().getDoctors());
+                }
+            }
+
+            List<DoctorDetailsData> uniqueDoctors = allDoctors.stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.collectingAndThen(
+                            Collectors.toMap(DoctorDetailsData::getDoctor_id, d -> d, (first, duplicate) -> first),
+                            map -> new ArrayList<>(map.values())));
+
+            if (uniqueDoctors.isEmpty()) {
+                return ResponseEntity.noContent().build();
+            }
+
+            return ResponseEntity.ok(uniqueDoctors);
+
+        } catch (Exception e) {
+            log.error("Failed to fetch doctors for clinic {}", clinicId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 

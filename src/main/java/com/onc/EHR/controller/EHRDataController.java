@@ -53,4 +53,19 @@ public class EHRDataController {
     public ResponseEntity<List<FormData>> fetchSoapDetails(@RequestParam String fhirId) {
         return ehrDataService.fetchSoapDetails(fhirId);
     }
+
+    @GetMapping("/clinic-details")
+    public ResponseEntity<Clinic> fetchClinicDetails(@RequestParam int clinicId) {
+        return ehrDataService.fetchClinicDetails(clinicId);
+    }
+
+    @GetMapping("/clinics")
+    public ResponseEntity<List<Clinic>> fetchAllClinicsByOrganisationId(@RequestParam int organisationId) {
+        return ehrDataService.fetchAllClinicsByOrganisationId(organisationId);
+    }
+
+    @GetMapping("/providers")
+    public ResponseEntity<List<DoctorDetailsData>> fetchAllDoctorsByClinicId(@RequestParam String clinicId) {
+        return ehrDataService.fetchAllDoctorsByClinicId(clinicId);
+    }
 }

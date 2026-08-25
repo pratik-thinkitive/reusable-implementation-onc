@@ -30,6 +30,12 @@ public interface EHRDataService {
 
     ResponseEntity<List<FormData>> fetchSoapDetails(String fhirId);
 
+    ResponseEntity<Clinic> fetchClinicDetails(int clinicId);
+
+    ResponseEntity<List<Clinic>> fetchAllClinicsByOrganisationId(int organisationId);
+
+    ResponseEntity<List<DoctorDetailsData>> fetchAllDoctorsByClinicId(String clinicId);
+
     /** Extracts the provider-local patient id from a composite FHIR id of the form {@code org-patient}. */
     String extractPatientId(String patientFhirId);
 }

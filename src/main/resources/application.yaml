@@ -18,6 +18,10 @@ fhir:
 ehr:
   api:
     base-url: ${EHR_API_BASE_URL:https://provider.staging.ehr/apis/v1}
+  # Organisation whose clinics are enumerated when listing providers. Was a literal in the
+  # G2 code; set this per deployment.
+  organisation-id: ${EHR_ORGANISATION_ID:0}
+  provider-page-size: ${EHR_PROVIDER_PAGE_SIZE:50}
   token:
     url: ${EHR_TOKEN_URL:https://provider.staging.ehr/apis/v1/oauth/token}
     client-auth: ${EHR_CLIENT_AUTH:}
