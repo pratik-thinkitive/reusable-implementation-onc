@@ -10,6 +10,8 @@ import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.enums.RequestType;
 import com.onc.G2.service.PatientAccessDataService;
 import com.onc.G2.service.PatientAccessRequestService;
+import com.onc.G2.service.impl.PatientAccessWorkflowServiceImpl;
+import com.onc.G2.service.impl.PatientAttributionServiceImpl;
 import com.onc.config.ConfigurationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -47,12 +49,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * code <em>currently</em> does, so that a refactor which accidentally changes behaviour makes a
  * test go red. Read these as "this is the contract our callers see today".
  *
- * <p>Every collaborator is mocked, so nothing here touches a database or the upstream EHR API.
- * {@code @Import(ConfigurationService.class)} pulls in the application's real bean definitions so
- * the test context resembles production rather than a bare test slice.
+ * <p>Only the <em>leaf</em> services are mocked - the ones that reach a database or the upstream
+ * EHR API. The orchestration beans are imported for real, so these tests run the same decisions
+ * the application makes in production. That is deliberate: because the mocks and the assertions
+ * sit either side of the logic being moved, the tests keep passing only if the move preserved
+ * behaviour.
  */
 @WebMvcTest(G2Controller.class)
-@Import(ConfigurationService.class)
+@Import({ConfigurationService.class,
+        PatientAccessWorkflowServiceImpl.class,
+        PatientAttributionServiceImpl.class})
 class G2ControllerTest {
 
     private static final String PERSONAL_DETAILS_URL = "/ehr/g2/personal-details";
