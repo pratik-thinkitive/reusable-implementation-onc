@@ -2,15 +2,10 @@ package com.onc.G2.model;
 
 import java.time.LocalDate;
 
-/**
- * The date window a measure is reported over.
- *
- * <p>Seven places used to repeat the same "current calendar year" defaulting, so they could
- * drift apart. They all go through this now.
- */
+/** The date window a measure is reported over. */
 public record ReportingPeriod(LocalDate start, LocalDate end) {
 
-    /** The fallback the endpoints have always used when a caller omits the dates. */
+    /** What the endpoints fall back to when a caller omits the dates. */
     public static ReportingPeriod currentCalendarYear() {
         LocalDate today = LocalDate.now();
         return new ReportingPeriod(
@@ -18,10 +13,7 @@ public record ReportingPeriod(LocalDate start, LocalDate end) {
                 today.withMonth(12).withDayOfMonth(31));
     }
 
-    /**
-     * Builds a period, defaulting either end to the current calendar year when it is missing.
-     * Each side defaults independently, so supplying only a start keeps the default end.
-     */
+    /** Each end defaults on its own, so passing only a start keeps the default end. */
     public static ReportingPeriod of(LocalDate start, LocalDate end) {
         ReportingPeriod defaults = currentCalendarYear();
         return new ReportingPeriod(
@@ -29,11 +21,7 @@ public record ReportingPeriod(LocalDate start, LocalDate end) {
                 end != null ? end : defaults.end());
     }
 
-    /**
-     * Builds a period from ISO {@code yyyy-MM-dd} text, treating null or empty as absent.
-     *
-     * @throws java.time.format.DateTimeParseException if a non-empty value is not a valid date
-     */
+    /** Expects ISO {@code yyyy-MM-dd}; null or empty counts as not supplied. */
     public static ReportingPeriod parse(String start, String end) {
         return of(parseOrNull(start), parseOrNull(end));
     }

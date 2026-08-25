@@ -2,14 +2,13 @@ package com.onc.G2.service;
 
 import com.onc.G2.dto.PatientAttribution;
 
-/** Looks up who a patient is and who they are attributed to, by reading the upstream EHR. */
+/** Reads a patient's identity and billing attribution from the upstream EHR. */
 public interface PatientAttributionService {
 
     /**
-     * Resolves a patient's name, organisation, provider and TIN. Never throws and never returns
-     * null - an unreachable EHR yields null fields instead.
+     * Never throws - an unreachable EHR yields an attribution with null fields.
      *
-     * @param patientFhirId composite FHIR id of the form {@code organisation-patient}
+     * @param patientFhirId composite id of the form {@code organisation-patient}
      */
     PatientAttribution lookup(String patientFhirId);
 }

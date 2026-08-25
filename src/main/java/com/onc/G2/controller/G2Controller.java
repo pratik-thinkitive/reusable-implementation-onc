@@ -17,37 +17,29 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Patient-facing G2 endpoints. Only the successful path lives here; failures are turned into
- * responses by {@link com.onc.G2.exception.G2ExceptionHandler}.
- */
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/ehr/g2")
 @Slf4j
 public class G2Controller {
 
-    private static final String ACCESS_DENIED_MESSAGE =
-            "You do not currently have access to view your health information. Please request access for it.";
+    private static final String ACCESS_DENIED_MESSAGE = "You do not currently have access to view your health information. Please request access for it.";
 
     private final EHRDataService ehrDataService;
     private final PatientAccessWorkflowService patientAccessWorkflowService;
 
-    /** Returns the patient's own personal details, if they have been granted access. */
+    // Returns the patient's own personal details, if they have been granted access.
     @GetMapping("/personal-details")
     public ResponseEntity<?> fetchPatientMedicalDetails(@RequestParam String fhirId) {
         log.info("Medical details access request for patient: {}", fhirId);
-
         if (!patientAccessWorkflowService.checkAccessAndRecordView(fhirId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(accessDenied());
         }
-
-        // Passed straight through so the upstream status code survives.
         ResponseEntity<PersonalDetailsData> response = ehrDataService.fetchPatientPersonalDetails(fhirId);
         return response;
     }
 
-    /** Records a request for access. Answers 409 when an existing request blocks this one. */
+    // Answers 409 when an existing request already blocks this one.
     @PostMapping("/request-access")
     public ResponseEntity<AccessRequestResponse> requestAccess(
             @RequestParam String fhirId,
@@ -60,20 +52,16 @@ public class G2Controller {
 
         log.info("Access request for patient: {} with type: {}", fhirId, requestType);
 
-        AccessRequestResult result = patientAccessWorkflowService.requestAccess(
-                fhirId, requestType, encounterId, providerId, tinId,
-                reportingPeriodStart, reportingPeriodEnd);
+        AccessRequestResult result = patientAccessWorkflowService.requestAccess(fhirId, requestType, encounterId, providerId, tinId, reportingPeriodStart, reportingPeriodEnd);
 
         if (result.isDuplicate()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(
-                    accessRequestResponse(false, result.getMessage(), "DUPLICATE", result.getRequestId()));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(accessRequestResponse(false, result.getMessage(), "DUPLICATE", result.getRequestId()));
         }
 
         return ResponseEntity.ok(accessRequestResponse(
                 true, "Access request created successfully", "PENDING", result.getRequestId()));
     }
 
-    /** The advisory shown to a patient without access. */
     private AccessDeniedResponse accessDenied() {
         AccessDeniedResponse response = new AccessDeniedResponse();
         response.setSuccess(false);
@@ -83,8 +71,7 @@ public class G2Controller {
         return response;
     }
 
-    private AccessRequestResponse accessRequestResponse(boolean success, String message,
-                                                        String status, String requestId) {
+    private AccessRequestResponse accessRequestResponse(boolean success, String message, String status, String requestId) {
         AccessRequestResponse response = new AccessRequestResponse();
         response.setSuccess(success);
         response.setMessage(message);

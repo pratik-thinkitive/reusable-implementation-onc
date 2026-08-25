@@ -25,9 +25,8 @@ import java.util.stream.Collectors;
 public class PatientAccessDataServiceImpl implements PatientAccessDataService {
 
     /**
-     * Zone used to decide which calendar day an instant falls on when testing it against a
-     * reporting period. Fixed rather than system-default so the boundary days of a period do
-     * not move with the server's locale.
+     * Which calendar day an instant counts as. Fixed rather than system-default, so a period's
+     * first and last day mean the same thing wherever the server runs.
      */
     private static final ZoneId REPORTING_ZONE = ZoneOffset.UTC;
 

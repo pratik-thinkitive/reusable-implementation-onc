@@ -18,10 +18,8 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 
 /**
- * Coordinates the patient-facing steps of the G2 measure.
- *
- * <p>Deliberately not {@code @Transactional}: requesting access calls the EHR over HTTP, and
- * holding a transaction open across that would pin a connection for the whole round trip.
+ * Not {@code @Transactional} on purpose: requesting access calls the EHR over HTTP, and holding
+ * a transaction open across that would pin a connection for the whole round trip.
  */
 @Slf4j
 @Service
@@ -69,7 +67,6 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
             return createRequest(patientFhirId, requestType, encounterId, providerId, tinId,
                     reportingPeriodStart, reportingPeriodEnd);
         } catch (Exception e) {
-            // Names the operation so the caller sees the same message as before.
             throw new AccessOperationException("Error creating access request: " + e.getMessage(), e);
         }
     }
@@ -85,8 +82,8 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
         RequestType type = RequestType.valueOf(requestType.toUpperCase());
         ReportingPeriod period = ReportingPeriod.parse(reportingPeriodStart, reportingPeriodEnd);
 
-        // Name and organisation come from the EHR, but provider and TIN come from the caller's
-        // parameters below - the looked-up values go unused. Long-standing, preserved on purpose.
+        // Name and organisation come from the EHR; provider and TIN come from the caller's
+        // parameters below, so the looked-up ones go unused.
         PatientAttribution attribution = patientAttributionService.lookup(patientFhirId);
 
         PatientAccessRequestDto requestDto = patientAccessRequestService.createAccessRequest(
@@ -108,7 +105,7 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
                     requestDto.getId().toString(), requestDto.getDuplicateMessage());
         }
 
-        // One data row per patient per reporting period; a no-op if it already exists.
+        // Idempotent: one row per patient per period.
         patientAccessDataService.initializePatientData(
                 patientFhirId,
                 extractPatientId(patientFhirId),
@@ -120,7 +117,7 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
                 period.start(),
                 period.end());
 
-        // Requesting access happens during an encounter, so it counts towards the denominator.
+        // The request happens during an encounter, so it counts towards the denominator.
         patientAccessDataService.updateDenominator(
                 patientFhirId, period.start(), period.end(), Instant.now());
 
@@ -128,9 +125,8 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
     }
 
     /**
-     * Pulls the patient id out of a composite {@code organisation-patient} id, falling back to
-     * the whole input when there is no dash. EHRDataService's lookalike returns null instead,
-     * so the two are not interchangeable.
+     * Falls back to the whole input when there is no dash. EHRDataService has a lookalike that
+     * returns null instead, so the two are not interchangeable.
      */
     private String extractPatientId(String patientFhirId) {
         if (patientFhirId != null && patientFhirId.contains("-")) {

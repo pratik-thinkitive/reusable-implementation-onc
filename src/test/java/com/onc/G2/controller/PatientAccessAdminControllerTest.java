@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Records today's behaviour so a refactor that changes it fails loudly. */
+/** Locks in what these endpoints answer. */
 @WebMvcTest(PatientAccessAdminController.class)
 @Import({ConfigurationService.class, PatientAccessAdminServiceImpl.class})
 class PatientAccessAdminControllerTest {
@@ -97,7 +97,7 @@ class PatientAccessAdminControllerTest {
                     .andExpect(status().isInternalServerError())
                     .andReturn().getResponse().getContentAsString();
 
-            // .build() produces no body at all.
+            // .build() sends no body at all.
             assertThat(body).isEmpty();
         }
 
@@ -319,7 +319,7 @@ class PatientAccessAdminControllerTest {
         @Test
         @DisplayName("dates use yyyy-MM-dd; a yyyy-dd-MM value is rejected")
         void rejectsTransposedDate() throws Exception {
-            // Guards an earlier bug: these endpoints once declared yyyy-dd-MM.
+            // yyyy-dd-MM would accept this; yyyy-MM-dd must not.
             mockMvc.perform(get(BASE + "/data/all")
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-31-12"))
@@ -353,8 +353,7 @@ class PatientAccessAdminControllerTest {
                     .andExpect(jsonPath("$.reportingPeriodEnd").value("2026-12-31"))
                     .andReturn().getResponse().getContentAsString();
 
-            // Pinned because a plain DTO would serialize these alphabetically instead of in
-            // insertion order, so any such swap has to be a deliberate decision.
+            // Key order is part of what consumers see, so it is pinned.
             assertThat(topLevelKeys(body)).containsExactly(
                     "patientsWithAccess", "reportingPeriodStart", "reportingPeriodEnd",
                     "totalNumerator", "totalDenominator", "percentage");
@@ -415,7 +414,7 @@ class PatientAccessAdminControllerTest {
 
     // ------------------------------------------------------------------ fixtures
 
-    /** Top-level property names, in the order they appear. */
+    /** Top-level keys, in the order they appear. */
     @SuppressWarnings("unchecked")
     private List<String> topLevelKeys(String json) {
         return List.copyOf(((Map<String, Object>) JsonPath.parse(json).read("$", Map.class)).keySet());

@@ -43,10 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Records what these endpoints currently do, so a refactor that changes behaviour goes red.
- *
- * <p>Only the leaf services are mocked; the orchestration beans are imported for real. The
- * mocks and assertions therefore sit either side of any logic we move.
+ * Locks in what these endpoints answer. Only the leaf services are mocked, so the real
+ * orchestration runs and a behaviour change shows up here.
  */
 @WebMvcTest(G2Controller.class)
 @Import({ConfigurationService.class,
@@ -60,7 +58,7 @@ class G2ControllerTest {
     /** Composite FHIR id of the form {@code organisation-patient}. */
     private static final String FHIR_ID = "12-3456";
 
-    /** The controller derives this from FHIR_ID by splitting on "-" and taking the second part. */
+    /** The part of FHIR_ID after the dash. */
     private static final String PATIENT_ID = "3456";
 
     @Autowired
@@ -118,10 +116,9 @@ class G2ControllerTest {
                             "You do not currently have access to view your health information. "
                                     + "Please request access for it."));
 
-            // No access means the patient must not be counted.
+            // No access means neither counting the patient nor fetching the chart.
             verify(patientAccessDataService, never())
                     .updateNumerator(anyString(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any());
-            // The chart is never fetched either.
             verify(ehrDataService, never()).fetchPatientPersonalDetails(anyString());
         }
 
@@ -135,7 +132,7 @@ class G2ControllerTest {
                     .andExpect(status().isInternalServerError())
                     .andReturn().getResponse().getContentAsString();
 
-            // A bare String here, unlike every other error path in the module.
+            // A bare String, unlike every other error path here.
             assertThat(body).isEqualTo("Error processing request");
         }
     }
@@ -176,7 +173,6 @@ class G2ControllerTest {
                     eq(null), eq(expectedStart), eq(expectedEnd));
 
             // Provider and TIN come from the request parameters, not the EHR-derived values.
-            // Locked in so a refactor cannot change attribution by accident.
             verify(patientAccessDataService).initializePatientData(
                     eq(FHIR_ID), eq(PATIENT_ID), eq("Ada"), eq("Lovelace"), eq(7),
                     eq("prov-9"), eq("tin-9"), eq(expectedStart), eq(expectedEnd));
@@ -300,7 +296,7 @@ class G2ControllerTest {
 
     // ------------------------------------------------------------------ fixtures
 
-    /** Stubs the EHR walk: personal details, then doctor, then clinic. */
+    /** Stubs the EHR walk: personal details, doctor, clinic. */
     private void stubEhrLookups() {
         when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID))
                 .thenReturn(ResponseEntity.ok(personalDetails()));

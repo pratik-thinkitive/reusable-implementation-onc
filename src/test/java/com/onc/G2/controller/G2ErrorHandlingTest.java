@@ -23,9 +23,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Pins the exact error responses the G2 endpoints produce. A catch-all handler in
- * {@link G2ExceptionHandler} runs before Spring's own, so without care it turns a 4xx into a
- * 500 - the first test caught exactly that. Bodies are raw strings because "empty" is the contract.
+ * Pins the error responses G2 produces. The catch-all in {@link G2ExceptionHandler} runs ahead
+ * of Spring's own, so it can easily mask a 4xx as a 500. Bodies are raw strings because an
+ * empty one is part of the contract.
  */
 @WebMvcTest(PatientAccessAdminController.class)
 @Import({ConfigurationService.class, PatientAccessAdminServiceImpl.class})
@@ -110,7 +110,6 @@ class G2ErrorHandlingTest {
                 .andReturn().getResponse();
 
         assertThat(response.getStatus()).isEqualTo(500);
-        // requestId and status stay null, as on the old path.
         assertThat(response.getContentAsString()).isEqualTo(
                 "{\"success\":false,\"message\":\"Error granting access: boom\","
                         + "\"requestId\":null,\"status\":null}");

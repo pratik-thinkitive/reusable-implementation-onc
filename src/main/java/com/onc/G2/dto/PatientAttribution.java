@@ -3,10 +3,8 @@ package com.onc.G2.dto;
 import lombok.Data;
 
 /**
- * A patient's identity and who they are attributed to, as read from the EHR.
- *
- * <p>Every field may be null: a failed lookup returns an empty instance rather than throwing,
- * which is how the endpoints have always behaved.
+ * A patient's identity and who they bill under, read from the EHR.
+ * Fields are null when the lookup fails - callers get an empty instance, not an exception.
  */
 @Data
 public class PatientAttribution {

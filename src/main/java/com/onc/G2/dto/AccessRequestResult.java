@@ -2,12 +2,7 @@ package com.onc.G2.dto;
 
 import lombok.Data;
 
-/**
- * What happened when a patient asked for access.
- *
- * <p>Says nothing about HTTP on purpose: the service decides what happened, the controller
- * decides which status code that maps to.
- */
+/** Outcome of a patient's access request. The controller turns this into a status code. */
 @Data
 public class AccessRequestResult {
 
@@ -23,7 +18,7 @@ public class AccessRequestResult {
     /** The new request for CREATED, the blocking one for DUPLICATE. */
     private String requestId;
 
-    /** Set only for DUPLICATE: why the patient was blocked. */
+    /** Only set for DUPLICATE. */
     private String message;
 
     public static AccessRequestResult created(String requestId) {

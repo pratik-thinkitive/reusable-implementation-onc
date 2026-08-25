@@ -17,9 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * Carries out administrator decisions and reports measure performance.
- */
+/** Carries out administrator decisions and reports measure performance. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -28,12 +26,7 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
     private final PatientAccessRequestService patientAccessRequestService;
     private final PatientAccessDataService patientAccessDataService;
 
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Transactional so the status change and the counter updates all happen or none do. As
-     * four separate calls from the controller, a failure could leave the two disagreeing.
-     */
+    /** Transactional so a half-finished grant cannot leave the status and counters disagreeing. */
     @Override
     @Transactional
     public AccessRequestResponse grantAccess(Long requestId) {
@@ -59,7 +52,7 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
         ReportingPeriod period = new ReportingPeriod(
                 request.getReportingPeriodStart(), request.getReportingPeriodEnd());
 
-        // Should already exist from the request; this is a safety net and returns the existing row.
+        // Safety net - returns the existing row when there already is one.
         patientAccessDataService.initializePatientData(
                 request.getPatientFhirId(),
                 request.getPatientId(),
@@ -71,14 +64,13 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
                 period.start(),
                 period.end());
 
-        // Prefer the moment they asked - that is when the encounter actually happened.
+        // When they asked is when the encounter actually happened.
         patientAccessDataService.updateDenominator(
                 request.getPatientFhirId(),
                 period.start(),
                 period.end(),
                 orNow(request.getRequestedAt(), request.getAccessGrantedAt()));
 
-        // The numerator is timed to the approval itself.
         patientAccessDataService.updateNumerator(
                 request.getPatientFhirId(),
                 period.start(),
@@ -89,7 +81,7 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
         return response;
     }
 
-    /** {@inheritDoc} <p>Transactional for the same reason as {@link #grantAccess(Long)}. */
+    /** Transactional for the same reason as {@link #grantAccess(Long)}. */
     @Override
     @Transactional
     public AccessRequestResponse revokeAccess(Long requestId) {
@@ -141,7 +133,6 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
         return summarise(tinId, patients, period);
     }
 
-    /** Adds up the per-patient rows into the totals a dashboard shows. */
     private AccessDashboardResponse summarise(String groupId,
                                               List<PatientAccessDataDto> patients,
                                               ReportingPeriod period) {
@@ -161,7 +152,6 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
         return dashboard;
     }
 
-    /** First timestamp that is present, or now - replacing a nested conditional. */
     private Instant orNow(Instant... candidates) {
         for (Instant candidate : candidates) {
             if (candidate != null) {

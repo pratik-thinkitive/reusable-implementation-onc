@@ -13,15 +13,11 @@ import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/**
- * Turns G2 endpoint failures into responses, replacing the try/catch every endpoint carried.
- * Scoped to the G2 controllers - left open it would also govern EHR and QRDA.
- */
+/** Maps G2 failures to responses. Scoped to G2 so EHR and QRDA keep their own error handling. */
 @Slf4j
 @RestControllerAdvice(assignableTypes = {G2Controller.class, PatientAccessAdminController.class})
 public class G2ExceptionHandler {
 
-    /** Create, grant and revoke failures. requestId and status stay null, as they did before. */
     @ExceptionHandler(AccessOperationException.class)
     public ResponseEntity<AccessRequestResponse> handleAccessOperation(AccessOperationException ex) {
         log.error("Access operation failed", ex);
@@ -33,7 +29,7 @@ public class G2ExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
-    /** Plain text is unusual for this API, but it is what this endpoint has always returned. */
+    /** This endpoint answers in plain text rather than JSON. */
     @ExceptionHandler(PatientDataAccessException.class)
     public ResponseEntity<String> handlePatientDataAccess(PatientDataAccessException ex) {
         log.error("Error processing medical details access request", ex);
@@ -41,10 +37,8 @@ public class G2ExceptionHandler {
     }
 
     /**
-     * Anything else: 500 with no body, matching the listing, data and dashboard endpoints.
-     *
-     * <p>Spring's own request failures already carry the right 4xx, so they are re-thrown - a
-     * handler that re-throws counts as "not handled" and Spring falls back to its own.
+     * Everything else is a 500 with no body. Spring's own request failures already carry the
+     * right 4xx, so re-throwing hands them back to Spring instead of masking them.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Void> handleUnexpected(Exception ex) throws Exception {
@@ -56,12 +50,7 @@ public class G2ExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
     }
 
-    /**
-     * Did Spring reject the request itself, rather than our code failing?
-     *
-     * <p>Most such exceptions implement ErrorResponse, but a failed parameter conversion arrives
-     * as a TypeMismatchException, which does not - hence the explicit list.
-     */
+    /** Most of these implement ErrorResponse, but a failed conversion does not. */
     private boolean isSpringRequestFailure(Exception ex) {
         return ex instanceof ErrorResponse
                 || ex instanceof TypeMismatchException

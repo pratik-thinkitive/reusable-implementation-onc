@@ -5,17 +5,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
-/**
- * Reads patient, provider and organisation data from the upstream EHR provider API.
- *
- * <p>Single definition shared by every certification module. QRDA and G2 previously carried
- * separate copies of the patient reads that differed only in method naming, so a change to
- * one silently left the other behind.
- *
- * <p>Response semantics are preserved from the original implementations: a non-2xx upstream
- * status is passed through with a null body, an empty collection yields {@code noContent},
- * and any failure becomes a 500.
- */
+
 public interface EHRDataService {
 
     ResponseEntity<MedicalDetailsData> fetchPatientMedicalDetails(String fhirId);
