@@ -38,12 +38,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Characterization tests for {@link PatientAccessAdminController}.
- *
- * <p>Records today's behaviour so a refactor that changes it fails loudly. See
- * {@link G2ControllerTest} for the fuller explanation of the approach.
- */
+/** Records today's behaviour so a refactor that changes it fails loudly. */
 @WebMvcTest(PatientAccessAdminController.class)
 @Import({ConfigurationService.class, PatientAccessAdminServiceImpl.class})
 class PatientAccessAdminControllerTest {
@@ -102,7 +97,7 @@ class PatientAccessAdminControllerTest {
                     .andExpect(status().isInternalServerError())
                     .andReturn().getResponse().getContentAsString();
 
-            // ResponseEntity.status(...).build() produces no body at all here.
+            // .build() produces no body at all.
             assertThat(body).isEmpty();
         }
 
@@ -179,11 +174,11 @@ class PatientAccessAdminControllerTest {
                     eq(FHIR_ID), eq("3456"), eq("Ada"), eq("Lovelace"), eq(7),
                     eq("prov-9"), eq("tin-9"), eq(PERIOD_START), eq(PERIOD_END));
 
-            // The DENOMINATOR uses requestedAt (when the patient asked, during the encounter).
+            // Denominator uses requestedAt - when the patient asked, during the encounter.
             verify(patientAccessDataService)
                     .updateDenominator(FHIR_ID, PERIOD_START, PERIOD_END, requestedAt);
 
-            // The NUMERATOR uses accessGrantedAt (when the admin approved).
+            // Numerator uses accessGrantedAt - when the admin approved.
             verify(patientAccessDataService)
                     .updateNumerator(FHIR_ID, PERIOD_START, PERIOD_END, true, grantedAt);
         }
@@ -324,8 +319,7 @@ class PatientAccessAdminControllerTest {
         @Test
         @DisplayName("dates use yyyy-MM-dd; a yyyy-dd-MM value is rejected")
         void rejectsTransposedDate() throws Exception {
-            // Guards the bug fixed earlier: these endpoints once declared yyyy-dd-MM.
-            // Day 31 in the month position is invalid, so binding fails.
+            // Guards an earlier bug: these endpoints once declared yyyy-dd-MM.
             mockMvc.perform(get(BASE + "/data/all")
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-31-12"))
@@ -359,9 +353,8 @@ class PatientAccessAdminControllerTest {
                     .andExpect(jsonPath("$.reportingPeriodEnd").value("2026-12-31"))
                     .andReturn().getResponse().getContentAsString();
 
-            // The response is built from a LinkedHashMap, so keys appear in INSERTION order.
-            // A plain DTO would serialize them alphabetically instead - pinning the order here
-            // means any such swap has to be a deliberate, visible decision.
+            // Pinned because a plain DTO would serialize these alphabetically instead of in
+            // insertion order, so any such swap has to be a deliberate decision.
             assertThat(topLevelKeys(body)).containsExactly(
                     "patientsWithAccess", "reportingPeriodStart", "reportingPeriodEnd",
                     "totalNumerator", "totalDenominator", "percentage");
@@ -422,7 +415,7 @@ class PatientAccessAdminControllerTest {
 
     // ------------------------------------------------------------------ fixtures
 
-    /** Reads the top-level property names of a JSON object, in the order they appear. */
+    /** Top-level property names, in the order they appear. */
     @SuppressWarnings("unchecked")
     private List<String> topLevelKeys(String json) {
         return List.copyOf(((Map<String, Object>) JsonPath.parse(json).read("$", Map.class)).keySet());

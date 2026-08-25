@@ -1,12 +1,10 @@
 package com.onc.G2.enums;
 
 /**
- * Lifecycle state of a patient access request: PENDING on creation, then ACCESS_GRANTED or
- * ACCESS_REVOKED once an admin acts on it.
+ * Lifecycle state of an access request: PENDING, then granted or revoked once an admin acts.
  *
- * <p>Persisted by name via {@code @Enumerated(EnumType.STRING)}, and referenced as a string
- * literal in the JPQL of {@code PatientAccessRequestRepository}, so the constant names are
- * part of the stored schema and the JSON contract - rename only alongside a data migration.
+ * <p>Persisted by name and referenced as a string literal in PatientAccessRequestRepository's
+ * JPQL, so renaming a constant needs a data migration too.
  */
 public enum RequestStatus {
     PENDING,

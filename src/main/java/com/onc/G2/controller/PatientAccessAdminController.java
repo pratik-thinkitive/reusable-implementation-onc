@@ -23,10 +23,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Administrator endpoints for reviewing access requests and reading measure performance.
- *
- * <p>Only describes the successful path. Failures are turned into responses by
- * {@link com.onc.G2.exception.G2ExceptionHandler}.
+ * Administrator endpoints for reviewing access requests and reading measure performance. Only
+ * the successful path lives here; {@link com.onc.G2.exception.G2ExceptionHandler} handles the rest.
  */
 @RequiredArgsConstructor
 @RestController
@@ -190,10 +188,7 @@ public class PatientAccessAdminController {
 
     // ------------------------------------------------------------------ helpers
 
-    /**
-     * A refused decision is a client problem, so it answers 400; an accepted one answers 200.
-     * Unexpected failures never reach here - they go to the exception handler instead.
-     */
+    /** A refused decision is a client problem, so 400; an accepted one, 200. */
     private ResponseEntity<AccessRequestResponse> toResponse(AccessRequestResponse response) {
         return response.isSuccess()
                 ? ResponseEntity.ok(response)

@@ -1,10 +1,10 @@
 package com.onc.G2.enums;
 
 /**
- * Category of patient data a patient access request covers.
+ * Category of patient data an access request covers.
  *
- * <p>Persisted by name via {@code @Enumerated(EnumType.STRING)}, so the constant names are
- * part of the stored schema and the JSON contract - rename only alongside a data migration.
+ * <p>Persisted by name, so these constants are part of the stored schema and the JSON
+ * contract - rename only alongside a data migration.
  */
 public enum RequestType {
     MEDICAL_DETAILS_ACCESS,

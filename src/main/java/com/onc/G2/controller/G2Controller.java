@@ -18,10 +18,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Patient-facing G2 endpoints.
- *
- * <p>Only describes the successful path. Anything that fails is turned into a response by
- * {@link com.onc.G2.exception.G2ExceptionHandler}, which is why there is no error handling here.
+ * Patient-facing G2 endpoints. Only the successful path lives here; failures are turned into
+ * responses by {@link com.onc.G2.exception.G2ExceptionHandler}.
  */
 @RequiredArgsConstructor
 @RestController
@@ -35,9 +33,7 @@ public class G2Controller {
     private final EHRDataService ehrDataService;
     private final PatientAccessWorkflowService patientAccessWorkflowService;
 
-    /**
-     * Returns the patient's own personal details, but only if they have been granted access.
-     */
+    /** Returns the patient's own personal details, if they have been granted access. */
     @GetMapping("/personal-details")
     public ResponseEntity<?> fetchPatientMedicalDetails(@RequestParam String fhirId) {
         log.info("Medical details access request for patient: {}", fhirId);
@@ -46,16 +42,12 @@ public class G2Controller {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(accessDenied());
         }
 
-        // Passed straight through so the upstream status code survives untouched.
+        // Passed straight through so the upstream status code survives.
         ResponseEntity<PersonalDetailsData> response = ehrDataService.fetchPatientPersonalDetails(fhirId);
         return response;
     }
 
-    /**
-     * Records a patient's request for access to their health information.
-     *
-     * <p>Answers {@code 409 Conflict} when an existing request already blocks this one.
-     */
+    /** Records a request for access. Answers 409 when an existing request blocks this one. */
     @PostMapping("/request-access")
     public ResponseEntity<AccessRequestResponse> requestAccess(
             @RequestParam String fhirId,
@@ -81,7 +73,7 @@ public class G2Controller {
                 true, "Access request created successfully", "PENDING", result.getRequestId()));
     }
 
-    /** The advisory shown to a patient who has not been granted access yet. */
+    /** The advisory shown to a patient without access. */
     private AccessDeniedResponse accessDenied() {
         AccessDeniedResponse response = new AccessDeniedResponse();
         response.setSuccess(false);

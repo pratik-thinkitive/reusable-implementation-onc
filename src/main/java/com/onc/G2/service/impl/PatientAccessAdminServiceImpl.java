@@ -31,10 +31,8 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
     /**
      * {@inheritDoc}
      *
-     * <p>Marked {@code @Transactional} so the status change and the three counter updates either
-     * all happen or none do. Previously these were four separate calls made from the controller,
-     * each committing on its own, so a failure part-way through could leave a request marked as
-     * granted while the counters still said otherwise.
+     * <p>Transactional so the status change and the counter updates all happen or none do. As
+     * four separate calls from the controller, a failure could leave the two disagreeing.
      */
     @Override
     @Transactional
@@ -47,7 +45,6 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
         }
     }
 
-    /** The actual approval steps; failures are given operation context by the caller. */
     private AccessRequestResponse doGrantAccess(Long requestId) {
         AccessRequestResponse response = patientAccessRequestService.grantAccess(requestId);
         if (!response.isSuccess()) {
@@ -62,8 +59,7 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
         ReportingPeriod period = new ReportingPeriod(
                 request.getReportingPeriodStart(), request.getReportingPeriodEnd());
 
-        // Should already exist from when the patient made the request; this is a safety net and
-        // returns the existing row when there is one.
+        // Should already exist from the request; this is a safety net and returns the existing row.
         patientAccessDataService.initializePatientData(
                 request.getPatientFhirId(),
                 request.getPatientId(),
@@ -75,8 +71,7 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
                 period.start(),
                 period.end());
 
-        // Granting access implies the patient had an encounter. Prefer the moment they asked,
-        // since that is when the encounter actually happened.
+        // Prefer the moment they asked - that is when the encounter actually happened.
         patientAccessDataService.updateDenominator(
                 request.getPatientFhirId(),
                 period.start(),
@@ -106,7 +101,6 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
         }
     }
 
-    /** The actual withdrawal steps; failures are given operation context by the caller. */
     private AccessRequestResponse doRevokeAccess(Long requestId) {
         AccessRequestResponse response = patientAccessRequestService.revokeAccess(requestId);
         if (!response.isSuccess()) {
@@ -162,18 +156,12 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
         dashboard.setReportingPeriodEnd(period.end());
         dashboard.setTotalNumerator(totalNumerator);
         dashboard.setTotalDenominator(totalDenominator);
-        // Guarded against a zero denominator, which is what an empty dashboard looks like.
         dashboard.setPercentage(
                 totalDenominator > 0 ? (double) totalNumerator / totalDenominator * 100.0 : 0.0);
         return dashboard;
     }
 
-    /**
-     * Returns the first timestamp that is present, or the current time if none are.
-     *
-     * <p>Replaces the nested conditional the controller used, which read as "use this timestamp,
-     * or the next best one, or failing everything, right now".
-     */
+    /** First timestamp that is present, or now - replacing a nested conditional. */
     private Instant orNow(Instant... candidates) {
         for (Instant candidate : candidates) {
             if (candidate != null) {

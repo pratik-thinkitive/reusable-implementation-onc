@@ -3,24 +3,14 @@ package com.onc.G2.model;
 import java.time.LocalDate;
 
 /**
- * The date window a measure is reported over, as a single value instead of two loose
- * {@code LocalDate} parameters that have to be passed around together.
+ * The date window a measure is reported over.
  *
- * <p>Before this type existed, seven different places each repeated the same two lines to work
- * out "the current calendar year", which meant seven places that could drift apart. Everything
- * now goes through {@link #of(LocalDate, LocalDate)} or {@link #currentCalendarYear()}.
- *
- * <p>This is a {@code record}: Java generates the constructor, the {@code start()} and
- * {@code end()} accessors, {@code equals}, {@code hashCode} and {@code toString} for us. It is
- * immutable - once built, a period never changes.
+ * <p>Seven places used to repeat the same "current calendar year" defaulting, so they could
+ * drift apart. They all go through this now.
  */
 public record ReportingPeriod(LocalDate start, LocalDate end) {
 
-    /**
-     * The default window: 1 January to 31 December of the current year.
-     *
-     * <p>This is the fallback the endpoints have always used when a caller omits the dates.
-     */
+    /** The fallback the endpoints have always used when a caller omits the dates. */
     public static ReportingPeriod currentCalendarYear() {
         LocalDate today = LocalDate.now();
         return new ReportingPeriod(
@@ -29,14 +19,8 @@ public record ReportingPeriod(LocalDate start, LocalDate end) {
     }
 
     /**
-     * Builds a period from caller-supplied dates, falling back to the current calendar year for
-     * whichever end is missing.
-     *
-     * <p>Each side falls back independently, which is exactly what the controllers did before:
-     * supplying only a start date keeps the default end date.
-     *
-     * @param start first day of the period, or {@code null} to default it
-     * @param end   last day of the period, or {@code null} to default it
+     * Builds a period, defaulting either end to the current calendar year when it is missing.
+     * Each side defaults independently, so supplying only a start keeps the default end.
      */
     public static ReportingPeriod of(LocalDate start, LocalDate end) {
         ReportingPeriod defaults = currentCalendarYear();
@@ -46,7 +30,7 @@ public record ReportingPeriod(LocalDate start, LocalDate end) {
     }
 
     /**
-     * Builds a period from ISO date text ({@code yyyy-MM-dd}), treating null or empty as absent.
+     * Builds a period from ISO {@code yyyy-MM-dd} text, treating null or empty as absent.
      *
      * @throws java.time.format.DateTimeParseException if a non-empty value is not a valid date
      */

@@ -23,15 +23,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Pins the exact error responses the G2 endpoints produce.
- *
- * <p>These assertions exist because moving error handling into {@link G2ExceptionHandler} is easy
- * to get subtly wrong. A catch-all {@code @ExceptionHandler(Exception.class)} runs before
- * Spring's own handling, so without care it turns Spring's 4xx "you sent us a bad request" into a
- * 500 "we broke". The first test below is the one that caught exactly that.
- *
- * <p>Bodies are asserted as raw strings, because "empty" is part of the contract here and is not
- * something a JSON matcher can express.
+ * Pins the exact error responses the G2 endpoints produce. A catch-all handler in
+ * {@link G2ExceptionHandler} runs before Spring's own, so without care it turns a 4xx into a
+ * 500 - the first test caught exactly that. Bodies are raw strings because "empty" is the contract.
  */
 @WebMvcTest(PatientAccessAdminController.class)
 @Import({ConfigurationService.class, PatientAccessAdminServiceImpl.class})
@@ -56,8 +50,7 @@ class G2ErrorHandlingTest {
                         .param("reportingPeriodEnd", "2026-31-12"))
                 .andReturn().getResponse();
 
-        // Arrives as a TypeMismatchException, which - unlike most Spring MVC exceptions - does
-        // not implement ErrorResponse. The handler has to recognise it anyway.
+        // Arrives as a TypeMismatchException, which does not implement ErrorResponse.
         assertThat(response.getStatus()).isEqualTo(400);
         assertThat(response.getContentAsString()).isEmpty();
     }
@@ -117,7 +110,7 @@ class G2ErrorHandlingTest {
                 .andReturn().getResponse();
 
         assertThat(response.getStatus()).isEqualTo(500);
-        // requestId and status stay null - the controller never filled them on this path either.
+        // requestId and status stay null, as on the old path.
         assertThat(response.getContentAsString()).isEqualTo(
                 "{\"success\":false,\"message\":\"Error granting access: boom\","
                         + "\"requestId\":null,\"status\":null}");

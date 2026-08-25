@@ -10,15 +10,8 @@ import java.util.List;
 /**
  * A dashboard view: the patients counted in a reporting period, plus the measure totals.
  *
- * <p>Replaces the {@code Map<String, Object>} the controllers used to assemble by hand. A real
- * type means the shape is declared in one place and can be seen by callers and tests.
- *
- * <p><b>Why the two Jackson annotations matter.</b> The old code used a {@code LinkedHashMap},
- * which writes keys in the order they were inserted. A plain Java object instead writes them in
- * alphabetical order, so switching to this class would silently reshuffle the JSON. The explicit
- * {@code @JsonPropertyOrder} pins the original order. {@code @JsonInclude(NON_NULL)} keeps
- * {@code groupId} out of the per-provider response entirely, rather than emitting it as null -
- * again matching what the map produced.
+ * <p>This replaced a LinkedHashMap, which wrote keys in insertion order while a plain object
+ * writes them alphabetically. The two annotations below keep the JSON identical.
  */
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -33,7 +26,7 @@ import java.util.List;
 })
 public class AccessDashboardResponse {
 
-    /** Only set on the group (TIN-wide) dashboard; omitted from the per-provider one. */
+    /** Only set on the group dashboard; omitted entirely from the per-provider one. */
     private String groupId;
 
     private List<PatientAccessDataDto> patientsWithAccess;
@@ -47,6 +40,5 @@ public class AccessDashboardResponse {
     /** Patients eligible to be given access. */
     private int totalDenominator;
 
-    /** {@code totalNumerator / totalDenominator * 100}, or zero when the denominator is zero. */
     private double percentage;
 }

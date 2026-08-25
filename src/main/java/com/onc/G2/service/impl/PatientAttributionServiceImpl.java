@@ -17,14 +17,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Resolves patient attribution by walking three EHR endpoints in turn.
- *
- * <p>The walk is: <b>personal details</b> gives the patient's name, organisation and the id of
- * the doctor who created the record; <b>doctor details</b> gives that doctor's clinics; and
- * <b>clinic details</b> gives a clinic's TIN. The first clinic that has a TIN wins.
- *
- * <p>This code was previously four private methods inside {@code G2Controller}. It is moved here
- * unchanged so that the controller is left with nothing but request handling.
+ * Resolves patient attribution by walking three EHR endpoints: personal details gives the name,
+ * organisation and creating doctor; doctor details gives that doctor's clinics; clinic details
+ * gives the TIN. The first clinic with a TIN wins.
  */
 @Slf4j
 @Service
@@ -71,7 +66,7 @@ public class PatientAttributionServiceImpl implements PatientAttributionService 
         }
     }
 
-    /** Copies the patient's first and last name across, if the EHR returned any. */
+    /** Copies the patient's name across, if the EHR returned one. */
     private void applyPatientName(PersonalDetailsData personalDetails,
                                   PatientAttribution attribution,
                                   String patientFhirId) {

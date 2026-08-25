@@ -5,28 +5,25 @@ import lombok.Data;
 /**
  * What happened when a patient asked for access.
  *
- * <p>Deliberately says nothing about HTTP. The service decides <em>what happened</em>; the
- * controller decides which status code that maps to. Keeping those apart is the whole point of
- * splitting the layers - if a service returned a {@code ResponseEntity}, the web concern would
- * just have moved rather than gone away.
+ * <p>Says nothing about HTTP on purpose: the service decides what happened, the controller
+ * decides which status code that maps to.
  */
 @Data
 public class AccessRequestResult {
 
-    /** The two ways a request can end. */
     public enum Outcome {
-        /** A brand new request was stored and is awaiting admin review. */
+        /** Stored and awaiting admin review. */
         CREATED,
-        /** The patient already has a request that blocks this one. */
+        /** An existing request blocks this one. */
         DUPLICATE
     }
 
     private Outcome outcome;
 
-    /** Id of the stored request - the new one for CREATED, the blocking one for DUPLICATE. */
+    /** The new request for CREATED, the blocking one for DUPLICATE. */
     private String requestId;
 
-    /** Set only for DUPLICATE: the patient-facing explanation of why this was blocked. */
+    /** Set only for DUPLICATE: why the patient was blocked. */
     private String message;
 
     public static AccessRequestResult created(String requestId) {

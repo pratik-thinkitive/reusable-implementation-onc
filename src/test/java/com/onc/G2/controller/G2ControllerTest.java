@@ -43,17 +43,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Characterization tests for {@link G2Controller}.
+ * Records what these endpoints currently do, so a refactor that changes behaviour goes red.
  *
- * <p>A characterization test does not say what the code <em>should</em> do. It records what the
- * code <em>currently</em> does, so that a refactor which accidentally changes behaviour makes a
- * test go red. Read these as "this is the contract our callers see today".
- *
- * <p>Only the <em>leaf</em> services are mocked - the ones that reach a database or the upstream
- * EHR API. The orchestration beans are imported for real, so these tests run the same decisions
- * the application makes in production. That is deliberate: because the mocks and the assertions
- * sit either side of the logic being moved, the tests keep passing only if the move preserved
- * behaviour.
+ * <p>Only the leaf services are mocked; the orchestration beans are imported for real. The
+ * mocks and assertions therefore sit either side of any logic we move.
  */
 @WebMvcTest(G2Controller.class)
 @Import({ConfigurationService.class,
@@ -101,8 +94,7 @@ class G2ControllerTest {
                     .andExpect(jsonPath("$.organisation_id").value(7))
                     .andExpect(jsonPath("$.created_by").value(42));
 
-            // Reading the data is what puts the patient in the numerator. The reporting period
-            // defaults to the current calendar year, and hasAccess is always passed as true here.
+            // Reading the data is what puts the patient in the numerator.
             verify(patientAccessDataService).updateNumerator(
                     eq(FHIR_ID),
                     eq(LocalDate.now().withDayOfYear(1)),
@@ -143,7 +135,7 @@ class G2ControllerTest {
                     .andExpect(status().isInternalServerError())
                     .andReturn().getResponse().getContentAsString();
 
-            // Note this endpoint returns a bare String, unlike every other error path in the module.
+            // A bare String here, unlike every other error path in the module.
             assertThat(body).isEqualTo("Error processing request");
         }
     }
@@ -177,15 +169,14 @@ class G2ControllerTest {
             LocalDate expectedStart = LocalDate.now().withDayOfYear(1);
             LocalDate expectedEnd = LocalDate.now().withMonth(12).withDayOfMonth(31);
 
-            // requestType is accepted case-insensitively and upper-cased before valueOf.
+            // requestType is accepted case-insensitively.
             verify(patientAccessRequestService).createAccessRequest(
                     eq(FHIR_ID), eq(PATIENT_ID), eq("Ada"), eq("Lovelace"), eq(7),
                     eq("prov-9"), eq("tin-9"), eq(RequestType.MEDICAL_DETAILS_ACCESS), eq("enc-1"),
                     eq(null), eq(expectedStart), eq(expectedEnd));
 
-            // The provider and TIN written to the data row come from the REQUEST PARAMETERS,
-            // not from the values the controller derives from the EHR. Locking this in so the
-            // refactor cannot change attribution by accident.
+            // Provider and TIN come from the request parameters, not the EHR-derived values.
+            // Locked in so a refactor cannot change attribution by accident.
             verify(patientAccessDataService).initializePatientData(
                     eq(FHIR_ID), eq(PATIENT_ID), eq("Ada"), eq("Lovelace"), eq(7),
                     eq("prov-9"), eq("tin-9"), eq(expectedStart), eq(expectedEnd));
@@ -262,7 +253,7 @@ class G2ControllerTest {
                             .param("tinId", "tin-9"))
                     .andExpect(status().isInternalServerError())
                     .andExpect(jsonPath("$.success").value(false))
-                    // The enum name leaks into the message via IllegalArgumentException.
+                    // The enum name leaks in via IllegalArgumentException.
                     .andExpect(jsonPath("$.message").value(
                             org.hamcrest.Matchers.startsWith("Error creating access request:")));
         }
@@ -284,8 +275,7 @@ class G2ControllerTest {
         @Test
         @DisplayName("EHR lookup failure: still creates the request, with null patient names")
         void toleratesEhrFailure() throws Exception {
-            // A non-2xx personal-details response makes the controller fall back to an empty
-            // PatientDetails, so names and organisation land as null rather than aborting.
+            // A failed lookup falls back to empty attribution rather than aborting.
             when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID))
                     .thenReturn(ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(null));
             when(patientAccessRequestService.createAccessRequest(
@@ -310,7 +300,7 @@ class G2ControllerTest {
 
     // ------------------------------------------------------------------ fixtures
 
-    /** Stubs the three-step EHR walk: personal details, then doctor, then clinic. */
+    /** Stubs the EHR walk: personal details, then doctor, then clinic. */
     private void stubEhrLookups() {
         when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID))
                 .thenReturn(ResponseEntity.ok(personalDetails()));

@@ -14,29 +14,14 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Turns failures from the G2 endpoints into HTTP responses, in one place.
- *
- * <p>Before this existed, all fourteen G2 endpoints wrapped their body in an identical
- * {@code try/catch} that logged and returned a 500. That boilerplate is gone: the controllers now
- * describe only the successful path, and anything that goes wrong arrives here.
- *
- * <p><b>Scope.</b> {@code assignableTypes} deliberately limits this advice to the two G2
- * controllers. Without that, it would also govern the EHR and QRDA controllers and silently
- * change how <em>their</em> errors are reported.
- *
- * <p><b>Responses are unchanged.</b> Each handler reproduces exactly what the controller it
- * replaced used to return, down to the wording and the empty bodies.
+ * Turns G2 endpoint failures into responses, replacing the try/catch every endpoint carried.
+ * Scoped to the G2 controllers - left open it would also govern EHR and QRDA.
  */
 @Slf4j
 @RestControllerAdvice(assignableTypes = {G2Controller.class, PatientAccessAdminController.class})
 public class G2ExceptionHandler {
 
-    /**
-     * Failures from creating, granting or revoking access.
-     *
-     * <p>Answers 500 with the standard {@link AccessRequestResponse} body. {@code requestId} and
-     * {@code status} stay null, exactly as they did when the controller built this by hand.
-     */
+    /** Create, grant and revoke failures. requestId and status stay null, as they did before. */
     @ExceptionHandler(AccessOperationException.class)
     public ResponseEntity<AccessRequestResponse> handleAccessOperation(AccessOperationException ex) {
         log.error("Access operation failed", ex);
@@ -48,12 +33,7 @@ public class G2ExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
-    /**
-     * Failures while checking whether a patient may view their information.
-     *
-     * <p>Answers 500 with a plain-text body. That is unusual for this API, but it is what the
-     * endpoint has always returned, so it is preserved rather than tidied.
-     */
+    /** Plain text is unusual for this API, but it is what this endpoint has always returned. */
     @ExceptionHandler(PatientDataAccessException.class)
     public ResponseEntity<String> handlePatientDataAccess(PatientDataAccessException ex) {
         log.error("Error processing medical details access request", ex);
@@ -63,11 +43,8 @@ public class G2ExceptionHandler {
     /**
      * Anything else: 500 with no body, matching the listing, data and dashboard endpoints.
      *
-     * <p>Spring raises its own exceptions when it cannot make sense of a request - an unparseable
-     * date, a missing required parameter - and already answers those with the right 4xx. Those
-     * must not be swallowed into a 500 here, so they are re-thrown. Spring treats a handler that
-     * re-throws as "not handled" and falls back to its built-in behaviour, so the caller still
-     * gets the same 4xx with an empty body as before.
+     * <p>Spring's own request failures already carry the right 4xx, so they are re-thrown - a
+     * handler that re-throws counts as "not handled" and Spring falls back to its own.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Void> handleUnexpected(Exception ex) throws Exception {
@@ -80,18 +57,15 @@ public class G2ExceptionHandler {
     }
 
     /**
-     * Is this Spring telling us the request itself was malformed, rather than our own code
-     * failing?
+     * Did Spring reject the request itself, rather than our code failing?
      *
-     * <p>Most such exceptions implement {@link ErrorResponse}, but not all of them do - a failed
-     * parameter conversion arrives as a {@link TypeMismatchException}, which does not. Each entry
-     * below is a family of "the caller sent something we could not use", and every one of them
-     * already carries a 4xx status that this handler must not override.
+     * <p>Most such exceptions implement ErrorResponse, but a failed parameter conversion arrives
+     * as a TypeMismatchException, which does not - hence the explicit list.
      */
     private boolean isSpringRequestFailure(Exception ex) {
-        return ex instanceof ErrorResponse                  // most Spring MVC exceptions
-                || ex instanceof TypeMismatchException      // a parameter would not convert
-                || ex instanceof BindException              // request binding failed
-                || ex instanceof HttpMessageConversionException; // body could not be read/written
+        return ex instanceof ErrorResponse
+                || ex instanceof TypeMismatchException
+                || ex instanceof BindException
+                || ex instanceof HttpMessageConversionException;
     }
 }

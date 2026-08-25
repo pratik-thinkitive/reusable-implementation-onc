@@ -20,11 +20,8 @@ import java.time.Instant;
 /**
  * Coordinates the patient-facing steps of the G2 measure.
  *
- * <p>Note this class is deliberately <b>not</b> {@code @Transactional}. Requesting access starts
- * by calling out to the EHR over HTTP, and holding a database transaction open across a network
- * call would tie up a connection for as long as the remote system takes to answer. The
- * collaborators it calls manage their own transactions, exactly as they did when this logic sat
- * in the controller.
+ * <p>Deliberately not {@code @Transactional}: requesting access calls the EHR over HTTP, and
+ * holding a transaction open across that would pin a connection for the whole round trip.
  */
 @Slf4j
 @Service
@@ -72,8 +69,7 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
             return createRequest(patientFhirId, requestType, encounterId, providerId, tinId,
                     reportingPeriodStart, reportingPeriodEnd);
         } catch (Exception e) {
-            // Carries the operation name so the caller sees the same message as before. Covers
-            // an unknown request type and an unparseable date as well as downstream failures.
+            // Names the operation so the caller sees the same message as before.
             throw new AccessOperationException("Error creating access request: " + e.getMessage(), e);
         }
     }
@@ -89,9 +85,8 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
         RequestType type = RequestType.valueOf(requestType.toUpperCase());
         ReportingPeriod period = ReportingPeriod.parse(reportingPeriodStart, reportingPeriodEnd);
 
-        // Names and organisation come from the EHR. Provider and TIN, however, are taken from
-        // the caller's parameters below - the EHR-derived values are looked up but not used for
-        // attribution. That is long-standing behaviour, preserved here on purpose.
+        // Name and organisation come from the EHR, but provider and TIN come from the caller's
+        // parameters below - the looked-up values go unused. Long-standing, preserved on purpose.
         PatientAttribution attribution = patientAttributionService.lookup(patientFhirId);
 
         PatientAccessRequestDto requestDto = patientAccessRequestService.createAccessRequest(
@@ -113,7 +108,7 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
                     requestDto.getId().toString(), requestDto.getDuplicateMessage());
         }
 
-        // One data row per patient per reporting period; this is a no-op if it already exists.
+        // One data row per patient per reporting period; a no-op if it already exists.
         patientAccessDataService.initializePatientData(
                 patientFhirId,
                 extractPatientId(patientFhirId),
@@ -125,8 +120,7 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
                 period.start(),
                 period.end());
 
-        // Requesting access happens during an encounter, so the encounter counts towards the
-        // denominator, timed to now.
+        // Requesting access happens during an encounter, so it counts towards the denominator.
         patientAccessDataService.updateDenominator(
                 patientFhirId, period.start(), period.end(), Instant.now());
 
@@ -134,11 +128,9 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
     }
 
     /**
-     * Pulls the provider-local patient id out of a composite {@code organisation-patient} id.
-     *
-     * <p>Kept identical to the version that lived in {@code G2Controller}, which falls back to
-     * the whole input when there is no dash. {@code EHRDataService} has a similarly named method
-     * that returns {@code null} instead - the two are not interchangeable, so this one stays.
+     * Pulls the patient id out of a composite {@code organisation-patient} id, falling back to
+     * the whole input when there is no dash. EHRDataService's lookalike returns null instead,
+     * so the two are not interchangeable.
      */
     private String extractPatientId(String patientFhirId) {
         if (patientFhirId != null && patientFhirId.contains("-")) {

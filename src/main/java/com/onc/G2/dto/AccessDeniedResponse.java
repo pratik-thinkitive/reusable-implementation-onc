@@ -4,14 +4,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import lombok.Data;
 
 /**
- * Told to a patient who asks for their health information before access has been granted.
+ * Told to a patient who asks for their health information before access is granted.
  *
- * <p>Replaces a hand-built {@code HashMap}. The field names and values are exactly what that map
- * contained, so the response is unchanged for anyone consuming it.
- *
- * <p>{@code @JsonPropertyOrder} is here to make the key order deterministic. A {@code HashMap}
- * ordered its keys by hash, which was stable but arbitrary; this pins them to the order the
- * original code wrote them in.
+ * <p>Field names and values match the HashMap this replaced. The order is pinned so it is
+ * deterministic rather than hash-ordered.
  */
 @Data
 @JsonPropertyOrder({"success", "message", "accessGranted", "requestType"})

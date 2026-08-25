@@ -1,10 +1,10 @@
 package com.onc.G2.exception;
 
 /**
- * Something went wrong while deciding whether a patient may view their health information.
+ * Something failed while checking whether a patient may view their health information.
  *
- * <p>Unlike {@link AccessOperationException}, no detail is passed back to the caller - this path
- * answers with a fixed message. The cause is still carried so it reaches the logs.
+ * <p>No detail reaches the caller on this path - it answers with a fixed message - but the
+ * cause is carried so it still reaches the logs.
  */
 public class PatientDataAccessException extends RuntimeException {
 
