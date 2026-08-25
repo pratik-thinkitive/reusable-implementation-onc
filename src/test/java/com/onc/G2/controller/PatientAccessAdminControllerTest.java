@@ -8,6 +8,7 @@ import com.onc.G2.enums.RequestStatus;
 import com.onc.G2.enums.RequestType;
 import com.onc.G2.service.PatientAccessDataService;
 import com.onc.G2.service.PatientAccessRequestService;
+import com.onc.G2.service.impl.PatientAccessAdminServiceImpl;
 import com.onc.config.ConfigurationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -44,7 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@link G2ControllerTest} for the fuller explanation of the approach.
  */
 @WebMvcTest(PatientAccessAdminController.class)
-@Import(ConfigurationService.class)
+@Import({ConfigurationService.class, PatientAccessAdminServiceImpl.class})
 class PatientAccessAdminControllerTest {
 
     private static final String BASE = "/ehr/admin/patient-access";
