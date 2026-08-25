@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,9 +15,8 @@ public interface PatientAccessDataRepository extends JpaRepository<PatientAccess
 
     Optional<PatientAccessData> findByPatientFhirIdAndReportingPeriodStartAndReportingPeriodEnd(
             String patientFhirId, 
-            LocalDateTime reportingPeriodStart, 
-            LocalDateTime reportingPeriodEnd );
-
+            LocalDate reportingPeriodStart, 
+            LocalDate reportingPeriodEnd );
 
     @Query("SELECT pad FROM PatientAccessData pad " +
             "WHERE pad.tinId = :tinId " +
@@ -27,8 +26,8 @@ public interface PatientAccessDataRepository extends JpaRepository<PatientAccess
     List<PatientAccessData> findAllByTinAndProviderWithinPeriod(
             @Param("tinId") String tinId,
             @Param("providerId") String providerId,
-            @Param("reportingPeriodStart") LocalDateTime reportingPeriodStart,
-            @Param("reportingPeriodEnd") LocalDateTime reportingPeriodEnd);
+            @Param("reportingPeriodStart") LocalDate reportingPeriodStart,
+            @Param("reportingPeriodEnd") LocalDate reportingPeriodEnd);
 
     @Query("SELECT pad FROM PatientAccessData pad " +
             "WHERE pad.tinId = :tinId " +
@@ -36,13 +35,13 @@ public interface PatientAccessDataRepository extends JpaRepository<PatientAccess
             "AND pad.reportingPeriodEnd >= :reportingPeriodStart")
     List<PatientAccessData> findByTinIdWithinReportingPeriod(
             @Param("tinId") String tinId,
-            @Param("reportingPeriodStart") LocalDateTime reportingPeriodStart,
-            @Param("reportingPeriodEnd") LocalDateTime reportingPeriodEnd);
+            @Param("reportingPeriodStart") LocalDate reportingPeriodStart,
+            @Param("reportingPeriodEnd") LocalDate reportingPeriodEnd);
 
     @Query("SELECT pad FROM PatientAccessData pad " +
             "WHERE pad.reportingPeriodStart <= :reportingPeriodStart " +
             "AND pad.reportingPeriodEnd >= :reportingPeriodEnd")
-    List<PatientAccessData> findAllPatientsWithinReportingPeriod(LocalDateTime reportingPeriodStart, LocalDateTime reportingPeriodEnd);
+    List<PatientAccessData> findAllPatientsWithinReportingPeriod(LocalDate reportingPeriodStart, LocalDate reportingPeriodEnd);
 
     @Query("SELECT pad FROM PatientAccessData pad " +
             "WHERE (pad.hasAccessGranted = true OR (pad.hasAccessGranted = false AND pad.isNumeratorRecorded = true)) " +
@@ -50,9 +49,8 @@ public interface PatientAccessDataRepository extends JpaRepository<PatientAccess
             "AND pad.reportingPeriodStart <= :reportingPeriodEnd " +
             "AND pad.reportingPeriodEnd >= :reportingPeriodStart")
     List<PatientAccessData> getAccessGrantedPatients(
-            @Param("reportingPeriodStart") LocalDateTime reportingPeriodStart,
-            @Param("reportingPeriodEnd") LocalDateTime reportingPeriodEnd);
-
+            @Param("reportingPeriodStart") LocalDate reportingPeriodStart,
+            @Param("reportingPeriodEnd") LocalDate reportingPeriodEnd);
 
     @Query("SELECT pad FROM PatientAccessData pad " +
             "WHERE pad.tinId = :tinId " +
@@ -62,7 +60,7 @@ public interface PatientAccessDataRepository extends JpaRepository<PatientAccess
             "AND pad.reportingPeriodEnd >= :reportingPeriodStart")
     List<PatientAccessData> getAccessGrantedPatientsByTinId(
             @Param("tinId") String tinId,
-            @Param("reportingPeriodStart") LocalDateTime reportingPeriodStart,
-            @Param("reportingPeriodEnd") LocalDateTime reportingPeriodEnd);
+            @Param("reportingPeriodStart") LocalDate reportingPeriodStart,
+            @Param("reportingPeriodEnd") LocalDate reportingPeriodEnd);
 
 }

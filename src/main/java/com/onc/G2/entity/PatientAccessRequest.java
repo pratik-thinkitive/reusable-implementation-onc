@@ -6,7 +6,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 
 @Data
 @Entity
@@ -48,26 +49,16 @@ public class PatientAccessRequest {
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.STRING)
     private RequestStatus status;
-
-    @JsonFormat(pattern = "yyyy-dd-MM HH:mm:ss")
     @Column(name = "requested_at", nullable = false)
-    private LocalDateTime requestedAt;
-
-    @JsonFormat(pattern = "yyyy-dd-MM HH:mm:ss")
+    private Instant requestedAt;
     @Column(name = "access_granted_at")
-    private LocalDateTime accessGrantedAt;
-
-    @JsonFormat(pattern = "yyyy-dd-MM HH:mm:ss")
+    private Instant accessGrantedAt;
     @Column(name = "access_revoked_at")
-    private LocalDateTime accessRevokedAt;
-
-    @JsonFormat(pattern = "yyyy-dd-MM")
+    private Instant accessRevokedAt;
     @Column(name = "reporting_period_start")
-    private LocalDateTime reportingPeriodStart;
-
-    @JsonFormat(pattern = "yyyy-dd-MM")
+    private LocalDate reportingPeriodStart;
     @Column(name = "reporting_period_end")
-    private LocalDateTime reportingPeriodEnd;
+    private LocalDate reportingPeriodEnd;
 
     @Column(name = "is_first_encounter")
     private Boolean isFirstEncounter;

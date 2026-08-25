@@ -3,7 +3,8 @@ package com.onc.G2.dto;
 import com.onc.G2.entity.PatientAccessRequest;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 
 @Data
 public class PatientAccessRequestDto {
@@ -19,11 +20,11 @@ public class PatientAccessRequestDto {
     private String encounterId;
     private PatientAccessRequest.RequestType requestType;
     private PatientAccessRequest.RequestStatus status;
-    private LocalDateTime requestedAt;
-    private LocalDateTime accessGrantedAt;
-    private LocalDateTime accessRevokedAt;
-    private LocalDateTime reportingPeriodStart;
-    private LocalDateTime reportingPeriodEnd;
+    private Instant requestedAt;
+    private Instant accessGrantedAt;
+    private Instant accessRevokedAt;
+    private LocalDate reportingPeriodStart;
+    private LocalDate reportingPeriodEnd;
     private Boolean isFirstEncounter;
 
     private Boolean duplicateRequest = false;

@@ -10,7 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -28,7 +29,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
                                                       Integer organisationId, String providerId, String tinId,
                                                       PatientAccessRequest.RequestType requestType,
                                                       String encounterId, Boolean isFirstEncounter,
-                                                      LocalDateTime reportingPeriodStart, LocalDateTime reportingPeriodEnd) {
+                                                      LocalDate reportingPeriodStart, LocalDate reportingPeriodEnd) {
         
         log.info("Creating access request for patient: {} with type: {} for encounter: {} (provider: {}, tin: {})", patientFhirId, requestType, encounterId, providerId, tinId);
         
@@ -85,7 +86,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         accessRequest.setTinId(tinId);
         accessRequest.setRequestType(requestType);
         accessRequest.setStatus(PatientAccessRequest.RequestStatus.PENDING);
-        accessRequest.setRequestedAt(LocalDateTime.now());
+        accessRequest.setRequestedAt(Instant.now());
         accessRequest.setIsFirstEncounter(isFirstEncounter);
         accessRequest.setEncounterId(encounterId);
         accessRequest.setReportingPeriodStart(reportingPeriodStart);
@@ -96,7 +97,6 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         
         return convertToDto(savedRequest);
     }
-
 
     @Override
     public AccessRequestResponse grantAccess(Long requestId) {
@@ -119,7 +119,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         }
 
         request.setStatus(PatientAccessRequest.RequestStatus.ACCESS_GRANTED);
-        request.setAccessGrantedAt(LocalDateTime.now());
+        request.setAccessGrantedAt(Instant.now());
 
         patientAccessRequestRepository.save(request);
         log.info("Granted access for request: {}", requestId);
@@ -153,7 +153,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         }
 
         request.setStatus(PatientAccessRequest.RequestStatus.ACCESS_REVOKED);
-        request.setAccessRevokedAt(LocalDateTime.now());
+        request.setAccessRevokedAt(Instant.now());
 
         patientAccessRequestRepository.save(request);
         log.info("Revoked access for request: {}", requestId);

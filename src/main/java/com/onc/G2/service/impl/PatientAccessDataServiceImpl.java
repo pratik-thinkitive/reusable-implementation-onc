@@ -9,7 +9,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,12 +24,19 @@ import java.util.stream.Collectors;
 @Transactional
 public class PatientAccessDataServiceImpl implements PatientAccessDataService {
 
+    /**
+     * Zone used to decide which calendar day an instant falls on when testing it against a
+     * reporting period. Fixed rather than system-default so the boundary days of a period do
+     * not move with the server's locale.
+     */
+    private static final ZoneId REPORTING_ZONE = ZoneOffset.UTC;
+
     private final PatientAccessDataRepository patientAccessDataRepository;
 
     @Override
     public PatientAccessDataDto initializePatientData(String patientFhirId, String patientId, String firstName, String lastName,
                                                       Integer organisationId, String providerId, String tinId,
-                                                      LocalDateTime reportingPeriodStart, LocalDateTime reportingPeriodEnd) {
+                                                      LocalDate reportingPeriodStart, LocalDate reportingPeriodEnd) {
 
         log.info("Initializing patient data for: {} in reporting period: {} to {}", patientFhirId, reportingPeriodStart, reportingPeriodEnd);
 
@@ -63,8 +73,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     }
 
     @Override
-    public void updateDenominator(String patientFhirId, LocalDateTime reportingPeriodStart,
-                                  LocalDateTime reportingPeriodEnd, LocalDateTime encounterDate) {
+    public void updateDenominator(String patientFhirId, LocalDate reportingPeriodStart,
+                                  LocalDate reportingPeriodEnd, Instant encounterDate) {
 
         log.info("Updating denominator for patient: {} on encounter date: {}", patientFhirId, encounterDate);
 
@@ -74,7 +84,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
         }
 
         // Check if encounter date is within reporting period
-        if (encounterDate.isBefore(reportingPeriodStart) || encounterDate.isAfter(reportingPeriodEnd)) {
+        LocalDate encounterDay = LocalDate.ofInstant(encounterDate, REPORTING_ZONE);
+        if (encounterDay.isBefore(reportingPeriodStart) || encounterDay.isAfter(reportingPeriodEnd)) {
             log.info("Encounter date: {} is outside reporting period: {} to {}",
                     encounterDate, reportingPeriodStart, reportingPeriodEnd);
             return;
@@ -105,8 +116,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     }
 
     @Override
-    public void updateNumerator(String patientFhirId, LocalDateTime reportingPeriodStart,
-                                LocalDateTime reportingPeriodEnd, boolean hasAccess, LocalDateTime accessDate) {
+    public void updateNumerator(String patientFhirId, LocalDate reportingPeriodStart,
+                                LocalDate reportingPeriodEnd, boolean hasAccess, Instant accessDate) {
 
         log.info("Updating numerator for patient: {} with access: {} on date: {}",
                 patientFhirId, hasAccess, accessDate);
@@ -117,7 +128,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
         }
 
         // Check if access date is within reporting period
-        if (accessDate.isBefore(reportingPeriodStart) || accessDate.isAfter(reportingPeriodEnd)) {
+        LocalDate accessDay = LocalDate.ofInstant(accessDate, REPORTING_ZONE);
+        if (accessDay.isBefore(reportingPeriodStart) || accessDay.isAfter(reportingPeriodEnd)) {
             log.info("Access date: {} is outside reporting period: {} to {}",
                     accessDate, reportingPeriodStart, reportingPeriodEnd);
             return;
@@ -158,8 +170,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     }
 
     @Override
-    public void decrementNumerator(String patientFhirId, LocalDateTime reportingPeriodStart,
-                                   LocalDateTime reportingPeriodEnd) {
+    public void decrementNumerator(String patientFhirId, LocalDate reportingPeriodStart,
+                                   LocalDate reportingPeriodEnd) {
 
         log.info("Decrementing numerator for patient: {}", patientFhirId);
 
@@ -169,7 +181,7 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
         if (metrics.getNumeratorCount() > 0) {
             metrics.setNumeratorCount(0);
             metrics.setHasAccessGranted(false);
-            metrics.setAccessRevokedDate(LocalDateTime.now());
+            metrics.setAccessRevokedDate(Instant.now());
             log.info("Set numerator to 0 for patient: {} (access revoked by admin)", patientFhirId);
         } else {
             log.info("Numerator already 0 for patient: {} (no access to revoke)", patientFhirId);
@@ -179,8 +191,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     }
 
     @Override
-    public PatientAccessDataDto getTinData(String tinId, LocalDateTime reportingPeriodStart,
-                                           LocalDateTime reportingPeriodEnd) {
+    public PatientAccessDataDto getTinData(String tinId, LocalDate reportingPeriodStart,
+                                           LocalDate reportingPeriodEnd) {
         List<PatientAccessData> metrics = patientAccessDataRepository.findByTinIdWithinReportingPeriod(tinId, reportingPeriodStart, reportingPeriodEnd);
 
         Map<String, PatientAccessData> uniquePatients = metrics.stream()
@@ -203,8 +215,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     }
 
     @Override
-    public PatientAccessDataDto getTinProviderData(String tinId, String providerId, LocalDateTime reportingPeriodStart,
-                                                   LocalDateTime reportingPeriodEnd) {
+    public PatientAccessDataDto getTinProviderData(String tinId, String providerId, LocalDate reportingPeriodStart,
+                                                   LocalDate reportingPeriodEnd) {
         List<PatientAccessData> metrics = patientAccessDataRepository.findAllByTinAndProviderWithinPeriod(tinId, providerId, reportingPeriodStart, reportingPeriodEnd);
 
         int totalDenominator = metrics.stream().mapToInt(PatientAccessData::getDenominatorCount).sum();
@@ -223,7 +235,7 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     }
 
     @Override
-    public List<PatientAccessDataDto> getAllPatientData(LocalDateTime reportingPeriodStart, LocalDateTime reportingPeriodEnd) {
+    public List<PatientAccessDataDto> getAllPatientData(LocalDate reportingPeriodStart, LocalDate reportingPeriodEnd) {
         List<PatientAccessData> metrics = patientAccessDataRepository.findAllPatientsWithinReportingPeriod(reportingPeriodStart, reportingPeriodEnd);
         return metrics.stream()
                 .map(this::convertToDto)
@@ -233,7 +245,7 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     @Override
     public List<PatientAccessDataDto> getAccessGrantedPatientsFiltered(
             Integer organisationId, String providerId, String tinId,
-            LocalDateTime reportingPeriodStart, LocalDateTime reportingPeriodEnd) {
+            LocalDate reportingPeriodStart, LocalDate reportingPeriodEnd) {
 
         List<PatientAccessData> allPatients = patientAccessDataRepository.getAccessGrantedPatients(reportingPeriodStart, reportingPeriodEnd);
 
@@ -247,8 +259,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     }
 
     @Override
-    public List<PatientAccessDataDto> getAccessGrantedPatientsForGroup(String tinId, LocalDateTime reportingPeriodStart,
-                                                                       LocalDateTime reportingPeriodEnd) {
+    public List<PatientAccessDataDto> getAccessGrantedPatientsForGroup(String tinId, LocalDate reportingPeriodStart,
+                                                                       LocalDate reportingPeriodEnd) {
 
         List<PatientAccessData> allPatients = patientAccessDataRepository.getAccessGrantedPatientsByTinId(tinId, reportingPeriodStart, reportingPeriodEnd);
 
@@ -266,9 +278,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
         return (double) numerator / denominator * 100.0;
     }
 
-
-    private PatientAccessData getOrCreateMetrics(String patientFhirId, LocalDateTime reportingPeriodStart,
-                                                 LocalDateTime reportingPeriodEnd) {
+    private PatientAccessData getOrCreateMetrics(String patientFhirId, LocalDate reportingPeriodStart,
+                                                 LocalDate reportingPeriodEnd) {
         Optional<PatientAccessData> existingMetrics = patientAccessDataRepository
                 .findByPatientFhirIdAndReportingPeriodStartAndReportingPeriodEnd(
                         patientFhirId, reportingPeriodStart, reportingPeriodEnd);
@@ -319,8 +330,8 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
     /**
      * Check if this is the first encounter for the patient in the reporting period
      */
-    private boolean isFirstEncounterInReportingPeriod(String patientFhirId, LocalDateTime reportingPeriodStart,
-                                                      LocalDateTime reportingPeriodEnd, LocalDateTime encounterDate) {
+    private boolean isFirstEncounterInReportingPeriod(String patientFhirId, LocalDate reportingPeriodStart,
+                                                      LocalDate reportingPeriodEnd, Instant encounterDate) {
         // Check if there are any existing metrics for this patient in this reporting period
         Optional<PatientAccessData> existingMetrics = patientAccessDataRepository
                 .findByPatientFhirIdAndReportingPeriodStartAndReportingPeriodEnd(
@@ -339,7 +350,6 @@ public class PatientAccessDataServiceImpl implements PatientAccessDataService {
         }
 
         // Compare with the recorded first encounter date
-        return encounterDate.isBefore(metrics.getFirstEncounterDate()) ||
-                encounterDate.isEqual(metrics.getFirstEncounterDate());
+        return !encounterDate.isAfter(metrics.getFirstEncounterDate());
     }
 }

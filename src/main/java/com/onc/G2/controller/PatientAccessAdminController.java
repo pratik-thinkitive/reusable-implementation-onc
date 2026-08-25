@@ -13,7 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,7 +72,6 @@ public class PatientAccessAdminController {
         }
     }
 
-
     //Grant access to patient (directly from pending)
     @PostMapping("/grant-access/{requestId}")
     public ResponseEntity<AccessRequestResponse> grantAccess(@PathVariable Long requestId) {
@@ -86,8 +85,8 @@ public class PatientAccessAdminController {
                 // Update metrics - access granted
                 PatientAccessRequestDto request = patientAccessRequestService.getAccessRequestById(requestId);
                 if (request != null) {
-                    LocalDateTime reportingPeriodStart = request.getReportingPeriodStart();
-                    LocalDateTime reportingPeriodEnd = request.getReportingPeriodEnd();
+                    LocalDate reportingPeriodStart = request.getReportingPeriodStart();
+                    LocalDate reportingPeriodEnd = request.getReportingPeriodEnd();
 
                     // PatientAccessData should already exist (created when request was made)
                     // But call initializePatientData anyway to ensure it exists (it will return existing entry if found)
@@ -106,11 +105,11 @@ public class PatientAccessAdminController {
                     // Update denominator - access being granted implies patient had an encounter
                     // Use requestedAt as the encounter date (when patient requested access during encounter)
                     // If requestedAt is not available, use accessGrantedAt as fallback
-                    LocalDateTime encounterDate = request.getRequestedAt() != null 
+                    Instant encounterDate = request.getRequestedAt() != null 
                             ? request.getRequestedAt() 
                             : request.getAccessGrantedAt() != null 
                                 ? request.getAccessGrantedAt() 
-                                : LocalDateTime.now();
+                                : Instant.now();
                     
                     patientAccessDataService.updateDenominator(
                             request.getPatientFhirId(),
@@ -119,10 +118,10 @@ public class PatientAccessAdminController {
                             encounterDate );
                     
                     // Update numerator when access is granted
-                    // Use accessGrantedAt timestamp from the request (not LocalDateTime.now())
-                    LocalDateTime accessGrantedDate = request.getAccessGrantedAt() != null 
+                    // Use accessGrantedAt timestamp from the request (not Instant.now())
+                    Instant accessGrantedDate = request.getAccessGrantedAt() != null 
                             ? request.getAccessGrantedAt() 
-                            : LocalDateTime.now();
+                            : Instant.now();
                     
                     patientAccessDataService.updateNumerator(
                             request.getPatientFhirId(), 
@@ -159,8 +158,8 @@ public class PatientAccessAdminController {
                 // Update metrics - access revoked (decrement numerator)
                 PatientAccessRequestDto request = patientAccessRequestService.getAccessRequestById(requestId);
                 if (request != null) {
-                    LocalDateTime reportingPeriodStart = request.getReportingPeriodStart();
-                    LocalDateTime reportingPeriodEnd = request.getReportingPeriodEnd();
+                    LocalDate reportingPeriodStart = request.getReportingPeriodStart();
+                    LocalDate reportingPeriodEnd = request.getReportingPeriodEnd();
                     
                     patientAccessDataService.decrementNumerator(
                             request.getPatientFhirId(), 
@@ -225,13 +224,13 @@ public class PatientAccessAdminController {
         log.info("Fetching TIN data for tinId: {} from {} to {}", tinId, reportingPeriodStart, reportingPeriodEnd);
 
         try {
-            LocalDateTime startDate = reportingPeriodStart != null
-                    ? reportingPeriodStart.atStartOfDay()
-                    : LocalDate.now().withDayOfYear(1).atStartOfDay();
+            LocalDate startDate = reportingPeriodStart != null
+                    ? reportingPeriodStart
+                    : LocalDate.now().withDayOfYear(1);
 
-            LocalDateTime endDate = reportingPeriodEnd != null
-                    ? reportingPeriodEnd.atTime(23, 59, 59)
-                    : LocalDate.now().withMonth(12).withDayOfMonth(31).atTime(23, 59, 59);
+            LocalDate endDate = reportingPeriodEnd != null
+                    ? reportingPeriodEnd
+                    : LocalDate.now().withMonth(12).withDayOfMonth(31);
 
             PatientAccessDataDto data = patientAccessDataService.getTinData( tinId, startDate, endDate);
             return ResponseEntity.ok(data);
@@ -252,13 +251,13 @@ public class PatientAccessAdminController {
                 tinId, providerId, reportingPeriodStart, reportingPeriodEnd);
 
         try {
-            LocalDateTime startDate = reportingPeriodStart != null
-                    ? reportingPeriodStart.atStartOfDay()
-                    : LocalDate.now().withDayOfYear(1).atStartOfDay();
+            LocalDate startDate = reportingPeriodStart != null
+                    ? reportingPeriodStart
+                    : LocalDate.now().withDayOfYear(1);
 
-            LocalDateTime endDate = reportingPeriodEnd != null
-                    ? reportingPeriodEnd.atTime(23, 59, 59)
-                    : LocalDate.now().withMonth(12).withDayOfMonth(31).atTime(23, 59, 59);
+            LocalDate endDate = reportingPeriodEnd != null
+                    ? reportingPeriodEnd
+                    : LocalDate.now().withMonth(12).withDayOfMonth(31);
 
             // Call service
             PatientAccessDataDto data = patientAccessDataService.getTinProviderData(tinId, providerId, startDate, endDate);
@@ -270,7 +269,6 @@ public class PatientAccessAdminController {
         }
     }
 
-
     //Get all patient metrics for a reporting period
     @GetMapping("/data/all")
     public ResponseEntity<List<PatientAccessDataDto>> getAllPatientMetrics(
@@ -280,14 +278,13 @@ public class PatientAccessAdminController {
         log.info("Fetching all patient metrics from {} to {}", reportingPeriodStart, reportingPeriodEnd);
         
         try {
-            LocalDateTime startDate = reportingPeriodStart != null
-                    ? reportingPeriodStart.atStartOfDay()
-                    : LocalDate.now().withDayOfYear(1).atStartOfDay();
+            LocalDate startDate = reportingPeriodStart != null
+                    ? reportingPeriodStart
+                    : LocalDate.now().withDayOfYear(1);
 
-            LocalDateTime endDate = reportingPeriodEnd != null
-                    ? reportingPeriodEnd.atTime(23, 59, 59)
-                    : LocalDate.now().withMonth(12).withDayOfMonth(31).atTime(23, 59, 59);
-
+            LocalDate endDate = reportingPeriodEnd != null
+                    ? reportingPeriodEnd
+                    : LocalDate.now().withMonth(12).withDayOfMonth(31);
 
             List<PatientAccessDataDto> metrics = patientAccessDataService.getAllPatientData(startDate, endDate);
             return ResponseEntity.ok(metrics);
@@ -302,21 +299,21 @@ public class PatientAccessAdminController {
             @RequestParam Integer organisationId,
             @RequestParam String providerId,
             @RequestParam (required = false) String tinId,
-            @RequestParam @DateTimeFormat(pattern = "yyyy-dd-MM") LocalDate reportingPeriodStart,
-            @RequestParam @DateTimeFormat(pattern = "yyyy-dd-MM") LocalDate reportingPeriodEnd) {
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodStart,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodEnd) {
 
         log.info("Fetching dashboard with patients who have access for orgId: {}, providerId: {}, tinId: {}",
                 organisationId, providerId, tinId);
 
         try {
-            // Convert LocalDate to LocalDateTime
-            LocalDateTime startDate = reportingPeriodStart != null
-                    ? reportingPeriodStart.atStartOfDay()
-                    : LocalDate.now().withDayOfYear(1).atStartOfDay();
+            // Default to the current calendar year when no period is supplied
+            LocalDate startDate = reportingPeriodStart != null
+                    ? reportingPeriodStart
+                    : LocalDate.now().withDayOfYear(1);
 
-            LocalDateTime endDate = reportingPeriodEnd != null
-                    ? reportingPeriodEnd.atTime(23, 59, 59)
-                    : LocalDate.now().withMonth(12).withDayOfMonth(31).atTime(23, 59, 59);
+            LocalDate endDate = reportingPeriodEnd != null
+                    ? reportingPeriodEnd
+                    : LocalDate.now().withMonth(12).withDayOfMonth(31);
 
             // Get patients with access (filtered)
             List<PatientAccessDataDto> patientsWithAccess = patientAccessDataService
@@ -328,8 +325,8 @@ public class PatientAccessAdminController {
 
             Map<String, Object> dashboard = new LinkedHashMap<>();
             dashboard.put("patientsWithAccess", patientsWithAccess);
-            dashboard.put("reportingPeriodStart", startDate.toLocalDate().toString());
-            dashboard.put("reportingPeriodEnd", endDate.toLocalDate().toString());
+            dashboard.put("reportingPeriodStart", startDate.toString());
+            dashboard.put("reportingPeriodEnd", endDate.toString());
             dashboard.put("totalNumerator", totalNumerator);
             dashboard.put("totalDenominator", totalDenominator);
             dashboard.put("percentage", percentage);
@@ -344,20 +341,20 @@ public class PatientAccessAdminController {
     @GetMapping("/dashboard/group-patients-with-access")
     public ResponseEntity<Map<String, Object>> getGroupDashboardWithPatientsWithAccess(
             @RequestParam String tinId,
-            @RequestParam @DateTimeFormat(pattern = "yyyy-dd-MM") LocalDate reportingPeriodStart,
-            @RequestParam @DateTimeFormat(pattern = "yyyy-dd-MM") LocalDate reportingPeriodEnd) {
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodStart,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodEnd) {
 
         log.info("Fetching group dashboard with patients who have access for group: {}", tinId);
 
         try {
 
-            LocalDateTime startDate = reportingPeriodStart != null
-                    ? reportingPeriodStart.atStartOfDay()
-                    : LocalDate.now().withDayOfYear(1).atStartOfDay();
+            LocalDate startDate = reportingPeriodStart != null
+                    ? reportingPeriodStart
+                    : LocalDate.now().withDayOfYear(1);
 
-            LocalDateTime endDate = reportingPeriodEnd != null
-                    ? reportingPeriodEnd.atTime(23, 59, 59)
-                    : LocalDate.now().withMonth(12).withDayOfMonth(31).atTime(23, 59, 59);
+            LocalDate endDate = reportingPeriodEnd != null
+                    ? reportingPeriodEnd
+                    : LocalDate.now().withMonth(12).withDayOfMonth(31);
 
             List<PatientAccessDataDto> patientsWithAccess = patientAccessDataService.getAccessGrantedPatientsForGroup(tinId, startDate, endDate);
 
@@ -368,8 +365,8 @@ public class PatientAccessAdminController {
             Map<String, Object> dashboard = new LinkedHashMap<>();
             dashboard.put("groupId", tinId);
             dashboard.put("patientsWithAccess", patientsWithAccess);
-            dashboard.put("reportingPeriodStart", startDate.toLocalDate().toString());
-            dashboard.put("reportingPeriodEnd", endDate.toLocalDate().toString());
+            dashboard.put("reportingPeriodStart", startDate.toString());
+            dashboard.put("reportingPeriodEnd", endDate.toString());
             dashboard.put("totalNumerator", totalNumerator);
             dashboard.put("totalDenominator", totalDenominator);
             dashboard.put("percentage", percentage);

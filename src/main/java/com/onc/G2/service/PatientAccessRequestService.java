@@ -4,7 +4,7 @@ import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.entity.PatientAccessRequest;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 public interface PatientAccessRequestService {
@@ -14,7 +14,7 @@ public interface PatientAccessRequestService {
                                                 Integer organisationId, String providerId, String tinId,
                                                 PatientAccessRequest.RequestType requestType,
                                                 String encounterId, Boolean isFirstEncounter,
-                                                LocalDateTime reportingPeriodStart, LocalDateTime reportingPeriodEnd);
+                                                LocalDate reportingPeriodStart, LocalDate reportingPeriodEnd);
 
     // Grant access to patient (directly from pending)
     AccessRequestResponse grantAccess(Long requestId);

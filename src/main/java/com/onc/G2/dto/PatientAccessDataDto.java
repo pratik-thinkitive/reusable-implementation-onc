@@ -2,7 +2,8 @@ package com.onc.G2.dto;
 
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 
 @Data
 public class PatientAccessDataDto {
@@ -15,17 +16,17 @@ public class PatientAccessDataDto {
     private Integer organisationId;
     private String providerId;
     private String tinId;
-    private LocalDateTime reportingPeriodStart;
-    private LocalDateTime reportingPeriodEnd;
+    private LocalDate reportingPeriodStart;
+    private LocalDate reportingPeriodEnd;
     private Integer denominatorCount;
     private Integer numeratorCount;
     private Boolean hasAccessGranted;
-    private LocalDateTime accessGrantedDate;
-    private LocalDateTime accessRevokedDate;
+    private Instant accessGrantedDate;
+    private Instant accessRevokedDate;
     private Boolean isNumeratorRecorded;
-    private LocalDateTime firstEncounterDate;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant firstEncounterDate;
+    private Instant createdAt;
+    private Instant updatedAt;
 
     // Calculated fields
     private Double percentage;

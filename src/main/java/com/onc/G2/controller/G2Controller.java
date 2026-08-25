@@ -15,7 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -43,10 +44,10 @@ public class G2Controller {
                 log.info("Patient: {} has active access, fetching medical details", fhirId);
                 
                 // Update data - patient has access (numerator)
-                LocalDateTime reportingPeriodStart = LocalDateTime.now().withDayOfYear(1).withHour(0).withMinute(0).withSecond(0);
-                LocalDateTime reportingPeriodEnd = LocalDateTime.now().withMonth(12).withDayOfMonth(31).withHour(23).withMinute(59).withSecond(59);
+                LocalDate reportingPeriodStart = LocalDate.now().withDayOfYear(1);
+                LocalDate reportingPeriodEnd = LocalDate.now().withMonth(12).withDayOfMonth(31);
                 
-                patientAccessDataService.updateNumerator(fhirId, reportingPeriodStart, reportingPeriodEnd, true, LocalDateTime.now());
+                patientAccessDataService.updateNumerator(fhirId, reportingPeriodStart, reportingPeriodEnd, true, Instant.now());
                 
                 // Fetch and return personal details
                 ResponseEntity<PersonalDetailsData> response = ehrDataService.fetchPatientPersonalDetails(fhirId);
@@ -83,19 +84,19 @@ public class G2Controller {
             PatientAccessRequest.RequestType type = PatientAccessRequest.RequestType.valueOf(requestType.toUpperCase());
             
             // Use provided dates or default to current year if not provided
-            LocalDateTime startDate;
-            LocalDateTime endDate;
+            LocalDate startDate;
+            LocalDate endDate;
             
             if (reportingPeriodStart != null && !reportingPeriodStart.isEmpty()) {
-                startDate = LocalDateTime.parse(reportingPeriodStart);
+                startDate = LocalDate.parse(reportingPeriodStart);
             } else {
-                startDate = LocalDateTime.now().withDayOfYear(1).withHour(0).withMinute(0).withSecond(0);
+                startDate = LocalDate.now().withDayOfYear(1);
             }
             
             if (reportingPeriodEnd != null && !reportingPeriodEnd.isEmpty()) {
-                endDate = LocalDateTime.parse(reportingPeriodEnd);
+                endDate = LocalDate.parse(reportingPeriodEnd);
             } else {
-                endDate = LocalDateTime.now().withMonth(12).withDayOfMonth(31).withHour(23).withMinute(59).withSecond(59);
+                endDate = LocalDate.now().withMonth(12).withDayOfMonth(31);
             }
             
             // Extract patient details from EHRDataService to get organisation_id and tin_id
@@ -127,7 +128,7 @@ public class G2Controller {
                     patientDetails.getOrganisationId(), providerId, tinId, startDate, endDate);
             
             // Update denominator - patient had an encounter (when they created the request)
-            patientAccessDataService.updateDenominator(fhirId, startDate, endDate, LocalDateTime.now()); // Current time is the encounter date
+            patientAccessDataService.updateDenominator(fhirId, startDate, endDate, Instant.now()); // Current time is the encounter date
             
             AccessRequestResponse response = new AccessRequestResponse();
             response.setSuccess(true);
@@ -146,14 +147,12 @@ public class G2Controller {
         }
     }
 
-
     private String extractPatientId(String fhirId) {
         if (fhirId != null && fhirId.contains("-")) {
             return fhirId.split("-")[1];
         }
         return fhirId;
     }
-
 
      // Extract patient details from EHRDataService service to get organisation_id, provider_id, and tin_id
 
@@ -217,7 +216,6 @@ public class G2Controller {
         }
     }
 
-
     private List<Integer> fetchClinicIdsByDoctorId(int doctorId) {
         ResponseEntity<DoctorDetailsData> doctorResponse = ehrDataService.fetchDoctorDetails(doctorId);
         if (doctorResponse != null && doctorResponse.getStatusCode().is2xxSuccessful() && doctorResponse.getBody() != null) {
@@ -228,8 +226,6 @@ public class G2Controller {
         }
         return Collections.emptyList();
     }
-
-
 
     //Get TIN ID for a clinic
     private String extractTinIdFromClinicDetails(int clinicId) {
@@ -255,7 +251,6 @@ public class G2Controller {
             return null;
         }
     }
-
 
     // Inner class to hold patient details extracted from EHRDataService
     @Getter
