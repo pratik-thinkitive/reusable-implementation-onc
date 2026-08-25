@@ -7,6 +7,11 @@ spring:
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
 
+# NEVER true in a deployed environment - it echoes the exception class and message to the
+# client on a 500. Defaulted to false so a missing env var fails closed.
+onc:
+  expose-error-details: ${ONC_EXPOSE_ERROR_DETAILS:false}
+
 fhir:
   base-url: ${FHIR_BASE_URL:http://localhost:8081/fhir}
 
