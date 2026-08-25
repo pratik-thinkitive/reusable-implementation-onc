@@ -3,6 +3,8 @@ package com.onc.G2.service.impl;
 import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.entity.PatientAccessRequest;
+import com.onc.G2.enums.RequestStatus;
+import com.onc.G2.enums.RequestType;
 import com.onc.G2.repository.PatientAccessRequestRepository;
 import com.onc.G2.service.PatientAccessRequestService;
 import lombok.RequiredArgsConstructor;
@@ -27,22 +29,22 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
     @Override
     public PatientAccessRequestDto createAccessRequest(String patientFhirId, String patientId, String firstName, String lastName,
                                                       Integer organisationId, String providerId, String tinId,
-                                                      PatientAccessRequest.RequestType requestType,
+                                                      RequestType requestType,
                                                       String encounterId, Boolean isFirstEncounter,
                                                       LocalDate reportingPeriodStart, LocalDate reportingPeriodEnd) {
         
         log.info("Creating access request for patient: {} with type: {} for encounter: {} (provider: {}, tin: {})", patientFhirId, requestType, encounterId, providerId, tinId);
         
         // Check if patient already has a GRANTED request for this provider/TIN combination (regardless of encounter)
-        if (requestType == PatientAccessRequest.RequestType.MEDICAL_DETAILS_ACCESS) {
+        if (requestType == RequestType.MEDICAL_DETAILS_ACCESS) {
             Optional<PatientAccessRequest> existingAccessForProviderTin = patientAccessRequestRepository
                     .findByPatientFhirIdAndRequestTypeAndProviderIdAndTinId(patientFhirId, requestType, providerId, tinId);
 
             if (existingAccessForProviderTin.isPresent()) {
                 PatientAccessRequest existingRequest = existingAccessForProviderTin.get();
-                PatientAccessRequest.RequestStatus existingStatus = existingRequest.getStatus();
+                RequestStatus existingStatus = existingRequest.getStatus();
 
-                if (existingStatus == PatientAccessRequest.RequestStatus.ACCESS_GRANTED) {
+                if (existingStatus == RequestStatus.ACCESS_GRANTED) {
                     log.info("Patient: {} already has ACCESS_GRANTED for provider: {} and TIN: {} (existing encounter: {}). " + "Blocking new request for encounter: {}",
                             patientFhirId, providerId, tinId, existingRequest.getEncounterId(), encounterId);
 
@@ -52,7 +54,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
                     return dto;
                 }
 
-                if (existingStatus == PatientAccessRequest.RequestStatus.ACCESS_REVOKED) {
+                if (existingStatus == RequestStatus.ACCESS_REVOKED) {
                     log.info("Patient: {} has ACCESS_REVOKED for provider: {} and TIN: {} (existing encounter: {}). " + "Blocking new request for encounter: {}",
                             patientFhirId, providerId, tinId, existingRequest.getEncounterId(), encounterId);
 
@@ -85,7 +87,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         accessRequest.setProviderId(providerId);
         accessRequest.setTinId(tinId);
         accessRequest.setRequestType(requestType);
-        accessRequest.setStatus(PatientAccessRequest.RequestStatus.PENDING);
+        accessRequest.setStatus(RequestStatus.PENDING);
         accessRequest.setRequestedAt(Instant.now());
         accessRequest.setIsFirstEncounter(isFirstEncounter);
         accessRequest.setEncounterId(encounterId);
@@ -111,14 +113,14 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         }
 
         PatientAccessRequest request = requestOpt.get();
-        if (request.getStatus() != PatientAccessRequest.RequestStatus.PENDING) {
+        if (request.getStatus() != RequestStatus.PENDING) {
             return AccessRequestResponse.builder()
                     .success(false)
                     .message("Request must be in pending status to grant access")
                     .build();
         }
 
-        request.setStatus(PatientAccessRequest.RequestStatus.ACCESS_GRANTED);
+        request.setStatus(RequestStatus.ACCESS_GRANTED);
         request.setAccessGrantedAt(Instant.now());
 
         patientAccessRequestRepository.save(request);
@@ -145,14 +147,14 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         }
 
         PatientAccessRequest request = requestOpt.get();
-        if (request.getStatus() != PatientAccessRequest.RequestStatus.ACCESS_GRANTED) {
+        if (request.getStatus() != RequestStatus.ACCESS_GRANTED) {
             return AccessRequestResponse.builder()
                     .success(false)
                     .message("Request must be in ACCESS_GRANTED status to revoke")
                     .build();
         }
 
-        request.setStatus(PatientAccessRequest.RequestStatus.ACCESS_REVOKED);
+        request.setStatus(RequestStatus.ACCESS_REVOKED);
         request.setAccessRevokedAt(Instant.now());
 
         patientAccessRequestRepository.save(request);
@@ -167,7 +169,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
     }
 
     @Override
-    public boolean hasActiveAccess(String patientFhirId, PatientAccessRequest.RequestType requestType) {
+    public boolean hasActiveAccess(String patientFhirId, RequestType requestType) {
         Optional<PatientAccessRequest> activeRequest = patientAccessRequestRepository.findCurrentActiveAccess(patientFhirId, requestType);
         return activeRequest.isPresent();
     }
@@ -177,7 +179,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         List<PatientAccessRequest> requests = patientAccessRequestRepository
                 .findByOrganisationIdAndProviderIdAndTinIdAndStatus(
                         organisationId, providerId, tinId,
-                        PatientAccessRequest.RequestStatus.PENDING);
+                        RequestStatus.PENDING);
 
         return requests.stream()
                 .map(this::convertToDto)
@@ -189,7 +191,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         List<PatientAccessRequest> requests = patientAccessRequestRepository
                 .findByOrganisationIdAndProviderIdAndTinIdAndStatus(
                         organisationId, providerId, tinId,
-                        PatientAccessRequest.RequestStatus.ACCESS_GRANTED);
+                        RequestStatus.ACCESS_GRANTED);
 
         return requests.stream()
                 .map(this::convertToDto)
@@ -202,7 +204,7 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
         List<PatientAccessRequest> requests = patientAccessRequestRepository
                 .findByOrganisationIdAndProviderIdAndTinIdAndStatus(
                         organisationId, providerId, tinId,
-                        PatientAccessRequest.RequestStatus.ACCESS_REVOKED);
+                        RequestStatus.ACCESS_REVOKED);
 
         return requests.stream()
                 .map(this::convertToDto)

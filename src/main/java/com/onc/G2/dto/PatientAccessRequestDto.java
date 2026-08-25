@@ -1,6 +1,7 @@
 package com.onc.G2.dto;
 
-import com.onc.G2.entity.PatientAccessRequest;
+import com.onc.G2.enums.RequestStatus;
+import com.onc.G2.enums.RequestType;
 import lombok.Data;
 
 import java.time.Instant;
@@ -18,8 +19,8 @@ public class PatientAccessRequestDto {
     private String providerId;
     private String tinId;
     private String encounterId;
-    private PatientAccessRequest.RequestType requestType;
-    private PatientAccessRequest.RequestStatus status;
+    private RequestType requestType;
+    private RequestStatus status;
     private Instant requestedAt;
     private Instant accessGrantedAt;
     private Instant accessRevokedAt;

@@ -4,7 +4,7 @@ import com.onc.EHR.dto.*;
 import com.onc.EHR.service.EHRDataService;
 import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessRequestDto;
-import com.onc.G2.entity.PatientAccessRequest;
+import com.onc.G2.enums.RequestType;
 import com.onc.G2.service.PatientAccessRequestService;
 import com.onc.G2.service.PatientAccessDataService;
 import lombok.Getter;
@@ -38,7 +38,7 @@ public class G2Controller {
         log.info("Medical details access request for patient: {}", fhirId);
         
         try {
-            boolean hasActiveAccess = patientAccessRequestService.hasActiveAccess(fhirId, PatientAccessRequest.RequestType.MEDICAL_DETAILS_ACCESS);
+            boolean hasActiveAccess = patientAccessRequestService.hasActiveAccess(fhirId, RequestType.MEDICAL_DETAILS_ACCESS);
             
             if (hasActiveAccess) {
                 log.info("Patient: {} has active access, fetching medical details", fhirId);
@@ -81,7 +81,7 @@ public class G2Controller {
         log.info("Access request for patient: {} with type: {}", fhirId, requestType);
         
         try {
-            PatientAccessRequest.RequestType type = PatientAccessRequest.RequestType.valueOf(requestType.toUpperCase());
+            RequestType type = RequestType.valueOf(requestType.toUpperCase());
             
             // Use provided dates or default to current year if not provided
             LocalDate startDate;

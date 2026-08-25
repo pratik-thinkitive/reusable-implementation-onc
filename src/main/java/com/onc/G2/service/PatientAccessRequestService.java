@@ -2,7 +2,7 @@ package com.onc.G2.service;
 
 import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessRequestDto;
-import com.onc.G2.entity.PatientAccessRequest;
+import com.onc.G2.enums.RequestType;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -12,7 +12,7 @@ public interface PatientAccessRequestService {
     // Create a new patient access request
     PatientAccessRequestDto createAccessRequest(String patientFhirId, String patientId, String firstName, String lastName,
                                                 Integer organisationId, String providerId, String tinId,
-                                                PatientAccessRequest.RequestType requestType,
+                                                RequestType requestType,
                                                 String encounterId, Boolean isFirstEncounter,
                                                 LocalDate reportingPeriodStart, LocalDate reportingPeriodEnd);
 
@@ -23,7 +23,7 @@ public interface PatientAccessRequestService {
     AccessRequestResponse revokeAccess(Long requestId);
 
     // Check if patient has active access for specific request type
-    boolean hasActiveAccess(String patientFhirId, PatientAccessRequest.RequestType requestType);
+    boolean hasActiveAccess(String patientFhirId, RequestType requestType);
 
     // Get all pending requests for admin review
     List<PatientAccessRequestDto> getPendingRequests(Integer organisationId, String providerId, String tinId);

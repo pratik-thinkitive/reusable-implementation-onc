@@ -1,6 +1,8 @@
 package com.onc.G2.repository;
 
 import com.onc.G2.entity.PatientAccessRequest;
+import com.onc.G2.enums.RequestStatus;
+import com.onc.G2.enums.RequestType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,7 +21,7 @@ public interface PatientAccessRequestRepository extends JpaRepository<PatientAcc
             "AND par.accessRevokedAt IS NULL")
     Optional<PatientAccessRequest> findCurrentActiveAccess(
             @Param("patientFhirId") String patientFhirId,
-            @Param("requestType") PatientAccessRequest.RequestType requestType);
+            @Param("requestType") RequestType requestType);
 
     @Query("SELECT r FROM PatientAccessRequest r WHERE r.organisationId = :organisationId " +
             "AND r.providerId = :providerId " +
@@ -29,16 +31,16 @@ public interface PatientAccessRequestRepository extends JpaRepository<PatientAcc
             @Param("organisationId") Integer organisationId,
             @Param("providerId") String providerId,
             @Param("tinId") String tinId,
-            @Param("status") PatientAccessRequest.RequestStatus status);
+            @Param("status") RequestStatus status);
 
     List<PatientAccessRequest> findByPatientFhirId(String patientFhirId);
 
     // Find existing request for same patient, encounter, and request type
-    Optional<PatientAccessRequest> findByPatientFhirIdAndEncounterIdAndRequestType(String patientFhirId, String encounterId, PatientAccessRequest.RequestType requestType);
+    Optional<PatientAccessRequest> findByPatientFhirIdAndEncounterIdAndRequestType(String patientFhirId, String encounterId, RequestType requestType);
 
     // Used to check if patient already has access for this provider/TIN combination
     @Query("SELECT par FROM PatientAccessRequest par WHERE par.patientFhirId = :patientFhirId AND par.requestType = :requestType AND par.providerId = :providerId AND par.tinId = :tinId")
     Optional<PatientAccessRequest> findByPatientFhirIdAndRequestTypeAndProviderIdAndTinId(
-            @Param("patientFhirId") String patientFhirId, @Param("requestType") PatientAccessRequest.RequestType requestType,
+            @Param("patientFhirId") String patientFhirId, @Param("requestType") RequestType requestType,
             @Param("providerId") String providerId, @Param("tinId") String tinId);
 }

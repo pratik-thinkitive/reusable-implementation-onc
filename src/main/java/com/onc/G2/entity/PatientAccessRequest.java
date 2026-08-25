@@ -1,7 +1,8 @@
 package com.onc.G2.entity;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.onc.G2.enums.RequestStatus;
+import com.onc.G2.enums.RequestType;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -65,15 +66,4 @@ public class PatientAccessRequest {
 
     @Column(name = "encounter_id")
     private String encounterId;
-
-    public enum RequestType {
-        MEDICAL_DETAILS_ACCESS,
-        PERSONAL_DETAILS_ACCESS,
-    }
-
-    public enum RequestStatus {
-        PENDING,
-        ACCESS_GRANTED,
-        ACCESS_REVOKED
-    }
 }
