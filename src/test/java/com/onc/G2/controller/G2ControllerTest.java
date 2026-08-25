@@ -6,12 +6,15 @@ import com.onc.EHR.dto.PatientInformation;
 import com.onc.EHR.dto.PersonalDetailsData;
 import com.onc.EHR.dto.PersonalDetailsResponseBlock;
 import com.onc.EHR.service.EHRDataService;
+import com.onc.G2.converter.StringToRequestTypeConverter;
 import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.enums.RequestType;
 import com.onc.G2.service.PatientAccessDataService;
 import com.onc.G2.service.PatientAccessRequestService;
 import com.onc.G2.service.impl.PatientAccessWorkflowServiceImpl;
 import com.onc.G2.service.impl.PatientAttributionServiceImpl;
+import com.onc.api.support.ResponseCode;
+import com.onc.common.exception.AppException;
 import com.onc.config.ConfigurationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -19,8 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -48,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(G2Controller.class)
 @Import({ConfigurationService.class,
+        StringToRequestTypeConverter.class,
         PatientAccessWorkflowServiceImpl.class,
         PatientAttributionServiceImpl.class})
 class G2ControllerTest {
@@ -84,13 +86,13 @@ class G2ControllerTest {
         void returnsDetailsWhenAccessIsActive() throws Exception {
             when(patientAccessRequestService.hasActiveAccess(FHIR_ID, RequestType.MEDICAL_DETAILS_ACCESS))
                     .thenReturn(true);
-            when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID))
-                    .thenReturn(ResponseEntity.ok(personalDetails()));
+            when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID)).thenReturn(personalDetails());
 
             mockMvc.perform(get(PERSONAL_DETAILS_URL).param("fhirId", FHIR_ID))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.organisation_id").value(7))
-                    .andExpect(jsonPath("$.created_by").value(42));
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.data.organisation_id").value(7))
+                    .andExpect(jsonPath("$.data.created_by").value(42));
 
             // Reading the data is what puts the patient in the numerator.
             verify(patientAccessDataService).updateNumerator(
@@ -102,7 +104,7 @@ class G2ControllerTest {
         }
 
         @Test
-        @DisplayName("without active access: returns 403 with the fixed advisory body")
+        @DisplayName("without active access: 403 with the advisory message in the envelope")
         void returnsForbiddenWhenAccessIsNotActive() throws Exception {
             when(patientAccessRequestService.hasActiveAccess(FHIR_ID, RequestType.MEDICAL_DETAILS_ACCESS))
                     .thenReturn(false);
@@ -110,8 +112,8 @@ class G2ControllerTest {
             mockMvc.perform(get(PERSONAL_DETAILS_URL).param("fhirId", FHIR_ID))
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.success").value(false))
-                    .andExpect(jsonPath("$.accessGranted").value(false))
-                    .andExpect(jsonPath("$.requestType").value("MEDICAL_DETAILS_ACCESS"))
+                    .andExpect(jsonPath("$.code").value("PATIENT_ACCESS_DENIED"))
+                    .andExpect(jsonPath("$.data").doesNotExist())
                     .andExpect(jsonPath("$.message").value(
                             "You do not currently have access to view your health information. "
                                     + "Please request access for it."));
@@ -123,17 +125,32 @@ class G2ControllerTest {
         }
 
         @Test
-        @DisplayName("when a collaborator throws: returns 500 with a plain-text body")
+        @DisplayName("when a collaborator throws: 500 in the envelope, cause not echoed")
         void returnsServerErrorWhenSomethingThrows() throws Exception {
             when(patientAccessRequestService.hasActiveAccess(anyString(), any()))
                     .thenThrow(new RuntimeException("boom"));
 
             String body = mockMvc.perform(get(PERSONAL_DETAILS_URL).param("fhirId", FHIR_ID))
                     .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                    .andExpect(jsonPath("$.message").value("Something went wrong. Please try again later."))
                     .andReturn().getResponse().getContentAsString();
 
-            // A bare String, unlike every other error path here.
-            assertThat(body).isEqualTo("Error processing request");
+            assertThat(body).doesNotContain("boom");
+        }
+
+        @Test
+        @DisplayName("an unreachable EHR surfaces as 502, not as a success with no data")
+        void upstreamFailureIsBadGateway() throws Exception {
+            when(patientAccessRequestService.hasActiveAccess(FHIR_ID, RequestType.MEDICAL_DETAILS_ACCESS))
+                    .thenReturn(true);
+            when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID)).thenThrow(new AppException(
+                    ResponseCode.UPSTREAM_UNAVAILABLE,
+                    "The EHR provider could not be reached. Please try again later."));
+
+            mockMvc.perform(get(PERSONAL_DETAILS_URL).param("fhirId", FHIR_ID))
+                    .andExpect(status().isBadGateway())
+                    .andExpect(jsonPath("$.code").value("UPSTREAM_UNAVAILABLE"));
         }
     }
 
@@ -144,7 +161,7 @@ class G2ControllerTest {
     class RequestAccess {
 
         @Test
-        @DisplayName("new request: creates it, seeds the data row and counts the encounter")
+        @DisplayName("new request: 201, seeds the data row and counts the encounter")
         void createsRequest() throws Exception {
             stubEhrLookups();
             when(patientAccessRequestService.createAccessRequest(
@@ -158,15 +175,16 @@ class G2ControllerTest {
                             .param("encounterId", "enc-1")
                             .param("providerId", "prov-9")
                             .param("tinId", "tin-9"))
-                    .andExpect(status().isOk())
+                    .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true))
-                    .andExpect(jsonPath("$.status").value("PENDING"))
-                    .andExpect(jsonPath("$.requestId").value("55"));
+                    .andExpect(jsonPath("$.code").value("CREATED"))
+                    .andExpect(jsonPath("$.data.status").value("PENDING"))
+                    .andExpect(jsonPath("$.data.requestId").value("55"));
 
             LocalDate expectedStart = LocalDate.now().withDayOfYear(1);
             LocalDate expectedEnd = LocalDate.now().withMonth(12).withDayOfMonth(31);
 
-            // requestType is accepted case-insensitively.
+            // requestType is still accepted case-insensitively, now via a registered converter.
             verify(patientAccessRequestService).createAccessRequest(
                     eq(FHIR_ID), eq(PATIENT_ID), eq("Ada"), eq("Lovelace"), eq(7),
                     eq("prov-9"), eq("tin-9"), eq(RequestType.MEDICAL_DETAILS_ACCESS), eq("enc-1"),
@@ -198,7 +216,7 @@ class G2ControllerTest {
                             .param("tinId", "tin-9")
                             .param("reportingPeriodStart", "2026-02-01")
                             .param("reportingPeriodEnd", "2026-11-30"))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isCreated());
 
             verify(patientAccessDataService).updateDenominator(
                     eq(FHIR_ID),
@@ -208,7 +226,7 @@ class G2ControllerTest {
         }
 
         @Test
-        @DisplayName("duplicate request: returns 409 and skips all counter updates")
+        @DisplayName("duplicate request: 409 carrying the blocking request's id, no counter updates")
         void returnsConflictForDuplicate() throws Exception {
             stubEhrLookups();
             PatientAccessRequestDto duplicate = newRequestDto(77L, true);
@@ -226,8 +244,9 @@ class G2ControllerTest {
                             .param("tinId", "tin-9"))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.success").value(false))
-                    .andExpect(jsonPath("$.status").value("DUPLICATE"))
-                    .andExpect(jsonPath("$.requestId").value("77"))
+                    .andExpect(jsonPath("$.code").value("DUPLICATE_REQUEST"))
+                    .andExpect(jsonPath("$.data.status").value("DUPLICATE"))
+                    .andExpect(jsonPath("$.data.requestId").value("77"))
                     .andExpect(jsonPath("$.message").value(
                             "You already have access to the health information from your prior appointments."));
 
@@ -239,24 +258,28 @@ class G2ControllerTest {
         }
 
         @Test
-        @DisplayName("unknown requestType: currently answers 500, not 400")
-        void returnsServerErrorForUnknownRequestType() throws Exception {
+        @DisplayName("unknown requestType: 400 listing the allowed values")
+        void rejectsUnknownRequestType() throws Exception {
             mockMvc.perform(post(REQUEST_ACCESS_URL)
                             .param("fhirId", FHIR_ID)
                             .param("requestType", "NOT_A_REAL_TYPE")
                             .param("encounterId", "enc-4")
                             .param("providerId", "prov-9")
                             .param("tinId", "tin-9"))
-                    .andExpect(status().isInternalServerError())
+                    .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false))
-                    // The enum name leaks in via IllegalArgumentException.
+                    .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
                     .andExpect(jsonPath("$.message").value(
-                            org.hamcrest.Matchers.startsWith("Error creating access request:")));
+                            "Invalid value for 'requestType'. Allowed: "
+                                    + "MEDICAL_DETAILS_ACCESS, PERSONAL_DETAILS_ACCESS."));
+
+            verify(patientAccessRequestService, never()).createAccessRequest(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
-        @DisplayName("unparseable reporting period: currently answers 500, not 400")
-        void returnsServerErrorForBadDate() throws Exception {
+        @DisplayName("unparseable reporting period: 400 naming the parameter and the format")
+        void rejectsBadDate() throws Exception {
             mockMvc.perform(post(REQUEST_ACCESS_URL)
                             .param("fhirId", FHIR_ID)
                             .param("requestType", "MEDICAL_DETAILS_ACCESS")
@@ -264,16 +287,19 @@ class G2ControllerTest {
                             .param("providerId", "prov-9")
                             .param("tinId", "tin-9")
                             .param("reportingPeriodStart", "not-a-date"))
-                    .andExpect(status().isInternalServerError())
-                    .andExpect(jsonPath("$.success").value(false));
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+                    .andExpect(jsonPath("$.message").value(
+                            "'reportingPeriodStart' must be a valid date in yyyy-MM-dd format."))
+                    .andExpect(jsonPath("$.errors.reportingPeriodStart").exists());
         }
 
         @Test
         @DisplayName("EHR lookup failure: still creates the request, with null patient names")
         void toleratesEhrFailure() throws Exception {
             // A failed lookup falls back to empty attribution rather than aborting.
-            when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID))
-                    .thenReturn(ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(null));
+            when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID)).thenThrow(new AppException(
+                    ResponseCode.UPSTREAM_UNAVAILABLE, "The EHR provider could not be reached."));
             when(patientAccessRequestService.createAccessRequest(
                     anyString(), anyString(), any(), any(), any(),
                     anyString(), anyString(), any(), anyString(), any(), any(), any()))
@@ -285,7 +311,7 @@ class G2ControllerTest {
                             .param("encounterId", "enc-6")
                             .param("providerId", "prov-9")
                             .param("tinId", "tin-9"))
-                    .andExpect(status().isOk())
+                    .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.success").value(true));
 
             verify(patientAccessRequestService).createAccessRequest(
@@ -298,8 +324,7 @@ class G2ControllerTest {
 
     /** Stubs the EHR walk: personal details, doctor, clinic. */
     private void stubEhrLookups() {
-        when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID))
-                .thenReturn(ResponseEntity.ok(personalDetails()));
+        when(ehrDataService.fetchPatientPersonalDetails(FHIR_ID)).thenReturn(personalDetails());
 
         Clinic clinic = new Clinic();
         clinic.setClinic_id(101);
@@ -309,8 +334,8 @@ class G2ControllerTest {
         doctor.setDoctor_id(42);
         doctor.setClinics(List.of(clinic));
 
-        when(ehrDataService.fetchDoctorDetails(anyInt())).thenReturn(ResponseEntity.ok(doctor));
-        when(ehrDataService.fetchClinicDetails(anyInt())).thenReturn(ResponseEntity.ok(clinic));
+        when(ehrDataService.fetchDoctorDetails(anyInt())).thenReturn(doctor);
+        when(ehrDataService.fetchClinicDetails(anyInt())).thenReturn(clinic);
     }
 
     private PersonalDetailsData personalDetails() {

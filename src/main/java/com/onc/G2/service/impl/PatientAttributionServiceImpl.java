@@ -9,7 +9,6 @@ import com.onc.G2.dto.PatientAttribution;
 import com.onc.G2.service.PatientAttributionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
@@ -19,6 +18,10 @@ import java.util.stream.Collectors;
 /**
  * Takes three EHR calls: personal details give the name, organisation and creating doctor; the
  * doctor gives their clinics; the first clinic with a TIN wins.
+ *
+ * <p>This is the one place a failed EHR read is deliberately swallowed: an access request must
+ * still be fileable when the provider directory is down, so the caller gets an attribution with
+ * null fields rather than an error.
  */
 @Slf4j
 @Service
@@ -32,17 +35,12 @@ public class PatientAttributionServiceImpl implements PatientAttributionService 
         log.info("Extracting patient details from EHRDataService for fhirId: {}", patientFhirId);
 
         try {
-            ResponseEntity<PersonalDetailsData> personalDetailsResponse =
-                    ehrDataService.fetchPatientPersonalDetails(patientFhirId);
+            PersonalDetailsData personalDetails = ehrDataService.fetchPatientPersonalDetails(patientFhirId);
 
-            if (personalDetailsResponse == null
-                    || !personalDetailsResponse.getStatusCode().is2xxSuccessful()
-                    || personalDetailsResponse.getBody() == null) {
+            if (personalDetails == null) {
                 log.warn("Failed to fetch personal details from EHRDataService for fhirId: {}", patientFhirId);
                 return new PatientAttribution();
             }
-
-            PersonalDetailsData personalDetails = personalDetailsResponse.getBody();
 
             PatientAttribution attribution = new PatientAttribution();
             attribution.setOrganisationId(personalDetails.getOrganisationId());
@@ -51,11 +49,10 @@ public class PatientAttributionServiceImpl implements PatientAttributionService 
 
             applyPatientName(personalDetails, attribution, patientFhirId);
 
-            log.info("Successfully extracted patient details - FirstName: {}, LastName: {}, "
-                            + "OrganisationId: {}, ProviderId: {}, TinId: {}",
-                    attribution.getFirstName(), attribution.getLastName(),
-                    attribution.getOrganisationId(), attribution.getProviderId(),
-                    attribution.getTinId());
+            // Patient names and TINs are PHI, so only the ids they were resolved for are logged.
+            log.info("Resolved attribution for fhirId: {} - organisationId: {}, providerId: {}, TIN present: {}",
+                    patientFhirId, attribution.getOrganisationId(), attribution.getProviderId(),
+                    attribution.getTinId() != null);
 
             return attribution;
 
@@ -89,16 +86,13 @@ public class PatientAttributionServiceImpl implements PatientAttributionService 
 
         attribution.setFirstName(info.getFirstName());
         attribution.setLastName(info.getLastName());
-        log.info("Extracted Patient Name: {} {}", info.getFirstName(), info.getLastName());
     }
 
     private String findTinForDoctor(int doctorId) {
-        List<Integer> clinicIds = fetchClinicIdsByDoctorId(doctorId);
-
-        for (Integer clinicId : clinicIds) {
+        for (Integer clinicId : fetchClinicIdsByDoctorId(doctorId)) {
             String tinId = extractTinIdFromClinicDetails(clinicId);
             if (tinId != null && !tinId.isEmpty()) {
-                log.info("Found valid TIN ID: {} for clinic ID: {}", tinId, clinicId);
+                log.info("Found a TIN for clinic ID: {}", clinicId);
                 return tinId;
             }
         }
@@ -108,30 +102,24 @@ public class PatientAttributionServiceImpl implements PatientAttributionService 
     }
 
     private List<Integer> fetchClinicIdsByDoctorId(int doctorId) {
-        ResponseEntity<DoctorDetailsData> doctorResponse = ehrDataService.fetchDoctorDetails(doctorId);
-
-        if (doctorResponse != null && doctorResponse.getStatusCode().is2xxSuccessful()
-                && doctorResponse.getBody() != null) {
-            List<Clinic> clinics = doctorResponse.getBody().getClinics();
-            if (clinics != null) {
-                return clinics.stream().map(Clinic::getClinic_id).collect(Collectors.toList());
+        try {
+            DoctorDetailsData doctor = ehrDataService.fetchDoctorDetails(doctorId);
+            if (doctor != null && doctor.getClinics() != null) {
+                return doctor.getClinics().stream().map(Clinic::getClinic_id).collect(Collectors.toList());
             }
+        } catch (Exception e) {
+            log.warn("Could not read clinics for doctor {}", doctorId);
         }
         return Collections.emptyList();
     }
 
     private String extractTinIdFromClinicDetails(int clinicId) {
         try {
-            ResponseEntity<Clinic> clinicResponse = ehrDataService.fetchClinicDetails(clinicId);
+            Clinic clinicDetails = ehrDataService.fetchClinicDetails(clinicId);
 
-            if (clinicResponse != null && clinicResponse.getStatusCode().is2xxSuccessful()
-                    && clinicResponse.getBody() != null) {
-
-                Clinic clinicDetails = clinicResponse.getBody();
+            if (clinicDetails != null) {
                 String tin = clinicDetails.getTax_identification_number();
-
                 if (tin != null && !tin.isEmpty()) {
-                    log.info("Successfully extracted TIN ID: {} for clinic: {}", tin, clinicId);
                     return tin;
                 }
             }
@@ -140,7 +128,7 @@ public class PatientAttributionServiceImpl implements PatientAttributionService 
             return null;
 
         } catch (Exception e) {
-            log.error("Error extracting TIN ID for clinic: {}", clinicId, e);
+            log.warn("Error reading clinic {} while resolving a TIN", clinicId);
             return null;
         }
     }

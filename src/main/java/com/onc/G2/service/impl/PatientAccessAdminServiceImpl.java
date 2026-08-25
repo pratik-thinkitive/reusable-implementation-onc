@@ -1,10 +1,8 @@
 package com.onc.G2.service.impl;
 
 import com.onc.G2.dto.AccessDashboardResponse;
-import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessDataDto;
 import com.onc.G2.dto.PatientAccessRequestDto;
-import com.onc.G2.exception.AccessOperationException;
 import com.onc.G2.model.ReportingPeriod;
 import com.onc.G2.service.PatientAccessAdminService;
 import com.onc.G2.service.PatientAccessDataService;
@@ -17,7 +15,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 
-/** Carries out administrator decisions and reports measure performance. */
+/**
+ * Carries out administrator decisions and reports measure performance.
+ *
+ * <p>Nothing here catches to build a response. A refused decision leaves as an
+ * {@link com.onc.common.exception.AppException} carrying its own status, and anything unexpected
+ * reaches the global handler, which reports it without echoing the cause.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,25 +33,10 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
     /** Transactional so a half-finished grant cannot leave the status and counters disagreeing. */
     @Override
     @Transactional
-    public AccessRequestResponse grantAccess(Long requestId) {
+    public PatientAccessRequestDto grantAccess(Long requestId) {
         log.info("Granting access for request: {} ", requestId);
-        try {
-            return doGrantAccess(requestId);
-        } catch (Exception e) {
-            throw new AccessOperationException("Error granting access: " + e.getMessage(), e);
-        }
-    }
 
-    private AccessRequestResponse doGrantAccess(Long requestId) {
-        AccessRequestResponse response = patientAccessRequestService.grantAccess(requestId);
-        if (!response.isSuccess()) {
-            return response;
-        }
-
-        PatientAccessRequestDto request = patientAccessRequestService.getAccessRequestById(requestId);
-        if (request == null) {
-            return response;
-        }
+        PatientAccessRequestDto request = patientAccessRequestService.grantAccess(requestId);
 
         ReportingPeriod period = new ReportingPeriod(
                 request.getReportingPeriodStart(), request.getReportingPeriodEnd());
@@ -78,38 +67,23 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
                 true,
                 orNow(request.getAccessGrantedAt()));
 
-        return response;
+        return request;
     }
 
     /** Transactional for the same reason as {@link #grantAccess(Long)}. */
     @Override
     @Transactional
-    public AccessRequestResponse revokeAccess(Long requestId) {
+    public PatientAccessRequestDto revokeAccess(Long requestId) {
         log.info("Revoking access for request: {}", requestId);
-        try {
-            return doRevokeAccess(requestId);
-        } catch (Exception e) {
-            throw new AccessOperationException("Error revoking access: " + e.getMessage(), e);
-        }
-    }
 
-    private AccessRequestResponse doRevokeAccess(Long requestId) {
-        AccessRequestResponse response = patientAccessRequestService.revokeAccess(requestId);
-        if (!response.isSuccess()) {
-            return response;
-        }
-
-        PatientAccessRequestDto request = patientAccessRequestService.getAccessRequestById(requestId);
-        if (request == null) {
-            return response;
-        }
+        PatientAccessRequestDto request = patientAccessRequestService.revokeAccess(requestId);
 
         patientAccessDataService.decrementNumerator(
                 request.getPatientFhirId(),
                 request.getReportingPeriodStart(),
                 request.getReportingPeriodEnd());
 
-        return response;
+        return request;
     }
 
     @Override

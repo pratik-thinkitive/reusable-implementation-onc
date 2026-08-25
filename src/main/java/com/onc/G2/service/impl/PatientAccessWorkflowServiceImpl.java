@@ -4,8 +4,6 @@ import com.onc.G2.dto.AccessRequestResult;
 import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.dto.PatientAttribution;
 import com.onc.G2.enums.RequestType;
-import com.onc.G2.exception.AccessOperationException;
-import com.onc.G2.exception.PatientDataAccessException;
 import com.onc.G2.model.ReportingPeriod;
 import com.onc.G2.service.PatientAccessDataService;
 import com.onc.G2.service.PatientAccessRequestService;
@@ -20,6 +18,9 @@ import java.time.Instant;
 /**
  * Not {@code @Transactional} on purpose: requesting access calls the EHR over HTTP, and holding
  * a transaction open across that would pin a connection for the whole round trip.
+ *
+ * <p>Nothing here catches to build a response. An unexpected failure reaches the global handler,
+ * which reports a 500 without echoing the cause to the caller.
  */
 @Slf4j
 @Service
@@ -32,55 +33,30 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
 
     @Override
     public boolean checkAccessAndRecordView(String patientFhirId) {
-        try {
-            boolean hasActiveAccess = patientAccessRequestService
-                    .hasActiveAccess(patientFhirId, RequestType.MEDICAL_DETAILS_ACCESS);
+        boolean hasActiveAccess = patientAccessRequestService
+                .hasActiveAccess(patientFhirId, RequestType.MEDICAL_DETAILS_ACCESS);
 
-            if (!hasActiveAccess) {
-                log.info("Patient: {} does not have active access. Returning access message.", patientFhirId);
-                return false;
-            }
-
-            log.info("Patient: {} has active access, fetching medical details", patientFhirId);
-
-            ReportingPeriod period = ReportingPeriod.currentCalendarYear();
-            patientAccessDataService.updateNumerator(
-                    patientFhirId, period.start(), period.end(), true, Instant.now());
-
-            return true;
-
-        } catch (Exception e) {
-            throw new PatientDataAccessException(
-                    "Failed to check access for patient " + patientFhirId, e);
+        if (!hasActiveAccess) {
+            log.info("Patient: {} does not have active access. Returning access message.", patientFhirId);
+            return false;
         }
+
+        log.info("Patient: {} has active access, fetching medical details", patientFhirId);
+
+        ReportingPeriod period = ReportingPeriod.currentCalendarYear();
+        patientAccessDataService.updateNumerator(
+                patientFhirId, period.start(), period.end(), true, Instant.now());
+
+        return true;
     }
 
     @Override
     public AccessRequestResult requestAccess(String patientFhirId,
-                                             String requestType,
+                                             RequestType requestType,
                                              String encounterId,
                                              String providerId,
                                              String tinId,
-                                             String reportingPeriodStart,
-                                             String reportingPeriodEnd) {
-        try {
-            return createRequest(patientFhirId, requestType, encounterId, providerId, tinId,
-                    reportingPeriodStart, reportingPeriodEnd);
-        } catch (Exception e) {
-            throw new AccessOperationException("Error creating access request: " + e.getMessage(), e);
-        }
-    }
-
-    private AccessRequestResult createRequest(String patientFhirId,
-                                              String requestType,
-                                              String encounterId,
-                                              String providerId,
-                                              String tinId,
-                                              String reportingPeriodStart,
-                                              String reportingPeriodEnd) {
-
-        RequestType type = RequestType.valueOf(requestType.toUpperCase());
-        ReportingPeriod period = ReportingPeriod.parse(reportingPeriodStart, reportingPeriodEnd);
+                                             ReportingPeriod period) {
 
         // Name and organisation come from the EHR; provider and TIN come from the caller's
         // parameters below, so the looked-up ones go unused.
@@ -94,7 +70,7 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
                 attribution.getOrganisationId(),
                 providerId,
                 tinId,
-                type,
+                requestType,
                 encounterId,
                 null, // isFirstEncounter is worked out later, when the encounter date is set
                 period.start(),

@@ -21,15 +21,4 @@ public record ReportingPeriod(LocalDate start, LocalDate end) {
                 end != null ? end : defaults.end());
     }
 
-    /** Expects ISO {@code yyyy-MM-dd}; null or empty counts as not supplied. */
-    public static ReportingPeriod parse(String start, String end) {
-        return of(parseOrNull(start), parseOrNull(end));
-    }
-
-    private static LocalDate parseOrNull(String value) {
-        if (value == null || value.isEmpty()) {
-            return null;
-        }
-        return LocalDate.parse(value);
-    }
 }

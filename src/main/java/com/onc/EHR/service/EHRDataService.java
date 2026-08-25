@@ -1,30 +1,37 @@
 package com.onc.EHR.service;
 
 import com.onc.EHR.dto.*;
-import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
-
+/**
+ * Reads from the EHR provider API.
+ *
+ * <p>Every method returns the payload itself and signals failure by throwing
+ * {@link com.onc.common.exception.AppException}; nothing here builds an HTTP response. A read
+ * that finds nothing yields an empty list, or throws {@code NOT_FOUND} where a single resource
+ * was addressed - the 204s the previous signature produced could not survive the response
+ * envelope, which always carries a body.
+ */
 public interface EHRDataService {
 
-    ResponseEntity<MedicalDetailsData> fetchPatientMedicalDetails(String fhirId);
+    MedicalDetailsData fetchPatientMedicalDetails(String fhirId);
 
-    ResponseEntity<PersonalDetailsData> fetchPatientPersonalDetails(String fhirId);
+    PersonalDetailsData fetchPatientPersonalDetails(String fhirId);
 
-    ResponseEntity<List<InsuranceDetails>> fetchPatientInsuranceDetails(String fhirId);
+    List<InsuranceDetails> fetchPatientInsuranceDetails(String fhirId);
 
-    ResponseEntity<AppointmentData> fetchAppointments(String fhirId, String clinicId);
+    AppointmentData fetchAppointments(String fhirId, String clinicId);
 
-    ResponseEntity<DoctorDetailsData> fetchDoctorDetails(int doctorId);
+    DoctorDetailsData fetchDoctorDetails(int doctorId);
 
-    ResponseEntity<List<FormData>> fetchSoapDetails(String fhirId);
+    List<FormData> fetchSoapDetails(String fhirId);
 
-    ResponseEntity<Clinic> fetchClinicDetails(int clinicId);
+    Clinic fetchClinicDetails(int clinicId);
 
-    ResponseEntity<List<Clinic>> fetchAllClinicsByOrganisationId(int organisationId);
+    List<Clinic> fetchAllClinicsByOrganisationId(int organisationId);
 
-    ResponseEntity<List<DoctorDetailsData>> fetchAllDoctorsByClinicId(String clinicId);
+    List<DoctorDetailsData> fetchAllDoctorsByClinicId(String clinicId);
 
     /** Extracts the provider-local patient id from a composite FHIR id of the form {@code org-patient}. */
     String extractPatientId(String patientFhirId);

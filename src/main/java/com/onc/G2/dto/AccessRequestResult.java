@@ -1,9 +1,17 @@
 package com.onc.G2.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import lombok.Data;
 
-/** Outcome of a patient's access request. The controller turns this into a status code. */
+/**
+ * Outcome of a patient's access request, and the payload the endpoint returns for it.
+ *
+ * <p>{@code success} and {@code message} are not fields here - those belong to the response
+ * envelope. What survives is the identity of the request the caller needs to follow up on.
+ */
 @Data
+@JsonPropertyOrder({"requestId", "status"})
 public class AccessRequestResult {
 
     public enum Outcome {
@@ -13,13 +21,19 @@ public class AccessRequestResult {
         DUPLICATE
     }
 
+    @JsonIgnore
     private Outcome outcome;
 
     /** The new request for CREATED, the blocking one for DUPLICATE. */
     private String requestId;
 
-    /** Only set for DUPLICATE. */
+    /** Why the request was blocked. Only set for DUPLICATE; carried in the envelope's message. */
+    @JsonIgnore
     private String message;
+
+    public String getStatus() {
+        return outcome == Outcome.DUPLICATE ? "DUPLICATE" : "PENDING";
+    }
 
     public static AccessRequestResult created(String requestId) {
         AccessRequestResult result = new AccessRequestResult();

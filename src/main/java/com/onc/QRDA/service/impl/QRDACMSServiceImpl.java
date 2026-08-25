@@ -75,33 +75,50 @@ public class QRDACMSServiceImpl implements QRDACMSService {
     // ---------------------------------------------------------------------------
 
     @Override
-    public ResponseEntity<MedicalDetailsData> fetchPatientMedicalDetails(String fhirId) {
+    public MedicalDetailsData fetchPatientMedicalDetails(String fhirId) {
         return ehrDataService.fetchPatientMedicalDetails(fhirId);
     }
 
     @Override
-    public ResponseEntity<PersonalDetailsData> fetchPatientPersonalDetails(String fhirId) {
+    public PersonalDetailsData fetchPatientPersonalDetails(String fhirId) {
         return ehrDataService.fetchPatientPersonalDetails(fhirId);
     }
 
     @Override
-    public ResponseEntity<List<InsuranceDetails>> fetchPatientInsuranceDetails(String fhirId) {
+    public List<InsuranceDetails> fetchPatientInsuranceDetails(String fhirId) {
         return ehrDataService.fetchPatientInsuranceDetails(fhirId);
     }
 
     @Override
-    public ResponseEntity<DoctorDetailsData> fetchDoctorDetails(int doctorId) {
+    public DoctorDetailsData fetchDoctorDetails(int doctorId) {
         return ehrDataService.fetchDoctorDetails(doctorId);
     }
 
     @Override
-    public ResponseEntity<List<FormData>> fetchSoapDetails(String fhirId) {
+    public List<FormData> fetchSoapDetails(String fhirId) {
         return ehrDataService.fetchSoapDetails(fhirId);
     }
 
     @Override
-    public ResponseEntity<AppointmentData> fetchAppointments(String fhirId, String clinicId) {
+    public AppointmentData fetchAppointments(String fhirId, String clinicId) {
         return ehrDataService.fetchAppointments(fhirId, clinicId);
+    }
+
+    /**
+     * The author, custodian and legal-authenticator blocks all need the creating doctor and all
+     * treat an unavailable one as "omit the detail", so a failed lookup is swallowed here rather
+     * than at each of the four call sites.
+     */
+    private DoctorDetailsData doctorOrNull(Integer doctorId) {
+        if (doctorId == null || doctorId <= 0) {
+            return null;
+        }
+        try {
+            return fetchDoctorDetails(doctorId);
+        } catch (Exception e) {
+            log.warn("Provider {} could not be read; its details are omitted from the document", doctorId);
+            return null;
+        }
     }
 
     public String extractPatientId(String patientFhirId) {
@@ -135,25 +152,21 @@ public class QRDACMSServiceImpl implements QRDACMSService {
 
     private PersonalDetailsData getPersonalDetailsData(String fhirId) {
         try {
-            ResponseEntity<PersonalDetailsData> response = fetchPatientPersonalDetails(fhirId);
-            if (response != null && response.getStatusCode().is2xxSuccessful()) {
-                return response.getBody();
-            }
+            return fetchPatientPersonalDetails(fhirId);
         } catch (Exception e) {
+            log.warn("Personal details unavailable for {}", fhirId);
+            return null;
         }
-        return null;
     }
 
     private List<Appointment> getAppointments(String fhirId) {
         try {
-            ResponseEntity<AppointmentData> response = fetchAppointments(fhirId, null);
-            if (response != null && response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                AppointmentData data = response.getBody();
-                if (data.getAppointments() != null) {
-                    return data.getAppointments();
-                }
+            AppointmentData data = fetchAppointments(fhirId, null);
+            if (data != null && data.getAppointments() != null) {
+                return data.getAppointments();
             }
         } catch (Exception e) {
+            log.warn("Appointments unavailable for {}", fhirId);
         }
         return Collections.emptyList();
     }
@@ -202,33 +215,21 @@ public class QRDACMSServiceImpl implements QRDACMSService {
     }
 
     public ClinicalDocument createQrdaDocument(ClinicalDocument document, String fhirId) {
-        PersonalDetailsData patientData = null;
-        try {
-            ResponseEntity<PersonalDetailsData> personalDetails = fetchPatientPersonalDetails(fhirId);
-            if (personalDetails.getStatusCode().is2xxSuccessful() && personalDetails.getBody() != null) {
-                patientData = personalDetails.getBody();
-            }
-        } catch (Exception e) {
-        }
+        // Each read degrades on its own: an unavailable section is left out rather than failing
+        // the document. That the result is then clinically incomplete is not signalled anywhere.
+        PersonalDetailsData patientData = getPersonalDetailsData(fhirId);
 
         List<InsuranceDetails> insuranceDetails = new ArrayList<>();
         try {
-            ResponseEntity<List<InsuranceDetails>> details = fetchPatientInsuranceDetails(fhirId);
-            if (details.getStatusCode().is2xxSuccessful() && details.getBody() != null) {
-                insuranceDetails = details.getBody();
+            List<InsuranceDetails> details = fetchPatientInsuranceDetails(fhirId);
+            if (details != null) {
+                insuranceDetails = details;
             }
         } catch (Exception e) {
+            log.warn("Insurance details unavailable for {}", fhirId);
         }
 
-        List<Appointment> appointments = new ArrayList<>();
-        try {
-            ResponseEntity<AppointmentData> appointmentResponse = fetchAppointments(fhirId, null);
-            if (appointmentResponse.getStatusCode().is2xxSuccessful() && appointmentResponse.getBody() != null
-                    && appointmentResponse.getBody().getAppointments() != null) {
-                appointments = appointmentResponse.getBody().getAppointments();
-            }
-        } catch (Exception e) {
-        }
+        List<Appointment> appointments = getAppointments(fhirId);
 
 
         CS realmCode = DatatypesFactory.eINSTANCE.createCS("US");
@@ -495,13 +496,7 @@ public class QRDACMSServiceImpl implements QRDACMSService {
 
         int doctorId = Optional.ofNullable(patientData).map(PersonalDetailsData::getCreatedBy).orElse(null);
 
-        DoctorDetailsData doctorDetails = null;
-        if (Objects.nonNull(doctorId) && doctorId > 0) {
-            ResponseEntity<DoctorDetailsData> doctorResponse = fetchDoctorDetails(doctorId);
-            if (Objects.nonNull(doctorResponse) && doctorResponse.getStatusCode().is2xxSuccessful()) {
-                doctorDetails = doctorResponse.getBody();
-            }
-        }
+        DoctorDetailsData doctorDetails = doctorOrNull(doctorId);
 
         AD address = DatatypesFactory.eINSTANCE.createAD();
         address.getUses().add(PostalAddressUse.WP);
@@ -550,13 +545,7 @@ public class QRDACMSServiceImpl implements QRDACMSService {
 
         int doctorId = Optional.ofNullable(patientData).map(PersonalDetailsData::getCreatedBy).orElse(null);
 
-        DoctorDetailsData doctorDetails = null;
-        if (Objects.nonNull(doctorId) && doctorId > 0) {
-            ResponseEntity<DoctorDetailsData> doctorResponse = fetchDoctorDetails(doctorId);
-            if (Objects.nonNull(doctorResponse) && doctorResponse.getStatusCode().is2xxSuccessful()) {
-                doctorDetails = doctorResponse.getBody();
-            }
-        }
+        DoctorDetailsData doctorDetails = doctorOrNull(doctorId);
 
         II custodianId = DatatypesFactory.eINSTANCE.createII();
         custodianId.setRoot("2.16.840.1.113883.4.336");
@@ -618,13 +607,7 @@ public class QRDACMSServiceImpl implements QRDACMSService {
         TEL tel = null;
 
         int doctorId = Optional.ofNullable(patientData).map(PersonalDetailsData::getCreatedBy).orElse(null);
-        DoctorDetailsData doctorDetails = null;
-        if (Objects.nonNull(doctorId) && doctorId > 0) {
-            ResponseEntity<DoctorDetailsData> doctorResponse = fetchDoctorDetails(doctorId);
-            if (Objects.nonNull(doctorResponse) && doctorResponse.getStatusCode().is2xxSuccessful()) {
-                doctorDetails = doctorResponse.getBody();
-            }
-        }
+        DoctorDetailsData doctorDetails = doctorOrNull(doctorId);
 
         if (Objects.nonNull(doctorDetails)) {
             II assignedEntityId = DatatypesFactory.eINSTANCE.createII();
@@ -705,13 +688,7 @@ public class QRDACMSServiceImpl implements QRDACMSService {
 
         int doctorId = Optional.ofNullable(patientData).map(PersonalDetailsData::getCreatedBy).orElse(null);
 
-        DoctorDetailsData doctorDetails = null;
-        if (Objects.nonNull(doctorId) && doctorId > 0) {
-            ResponseEntity<DoctorDetailsData> doctorResponse = fetchDoctorDetails(doctorId);
-            if (Objects.nonNull(doctorResponse) && doctorResponse.getStatusCode().is2xxSuccessful()) {
-                doctorDetails = doctorResponse.getBody();
-            }
-        }
+        DoctorDetailsData doctorDetails = doctorOrNull(doctorId);
 
         if (Objects.nonNull(doctorDetails)) {
 
@@ -957,9 +934,9 @@ public class QRDACMSServiceImpl implements QRDACMSService {
             if (Objects.nonNull(patientInfo)) {
                 try {
                     String fhirId = patientData.getOrganisationId() + "-" + patientData.getPatientId();
-                    ResponseEntity<List<FormData>> soapResponse = fetchSoapDetails(fhirId);
-                    if (Objects.nonNull(soapResponse) && soapResponse.getStatusCode().is2xxSuccessful() && Objects.nonNull(soapResponse.getBody())) {
-                        soapDetails = soapResponse.getBody();
+                    List<FormData> soapResponse = fetchSoapDetails(fhirId);
+                    if (Objects.nonNull(soapResponse)) {
+                        soapDetails = soapResponse;
                     }
                 } catch (Exception e) {
                     log.error("Error fetching SOAP details: {}", e.getMessage());

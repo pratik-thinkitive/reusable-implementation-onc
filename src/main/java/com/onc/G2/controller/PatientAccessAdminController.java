@@ -1,13 +1,16 @@
 package com.onc.G2.controller;
 
 import com.onc.G2.dto.AccessDashboardResponse;
-import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessDataDto;
 import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.model.ReportingPeriod;
 import com.onc.G2.service.PatientAccessAdminService;
 import com.onc.G2.service.PatientAccessDataService;
 import com.onc.G2.service.PatientAccessRequestService;
+import com.onc.api.support.ApiResponse;
+import com.onc.api.support.BaseController;
+import com.onc.api.support.ResponseCode;
+import com.onc.common.exception.AppException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -27,7 +30,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/ehr/admin/patient-access")
 @Slf4j
-public class PatientAccessAdminController {
+public class PatientAccessAdminController extends BaseController {
 
     private final PatientAccessRequestService patientAccessRequestService;
     private final PatientAccessDataService patientAccessDataService;
@@ -36,7 +39,7 @@ public class PatientAccessAdminController {
     // ------------------------------------------------------------------ request listings
 
     @GetMapping("/pending-requests")
-    public ResponseEntity<List<PatientAccessRequestDto>> getPendingRequests(
+    public ResponseEntity<ApiResponse<List<PatientAccessRequestDto>>> getPendingRequests(
             @RequestParam Integer organisationId,
             @RequestParam String providerId,
             @RequestParam String tinId) {
@@ -44,67 +47,73 @@ public class PatientAccessAdminController {
         log.info("Fetching pending requests for orgId: {}, providerId: {}, tinId: {}",
                 organisationId, providerId, tinId);
 
-        return ResponseEntity.ok(
-                patientAccessRequestService.getPendingRequests(organisationId, providerId, tinId));
+        return data(patientAccessRequestService.getPendingRequests(organisationId, providerId, tinId));
     }
 
     @GetMapping("/access-granted")
-    public ResponseEntity<List<PatientAccessRequestDto>> getAllGrantedRequests(
+    public ResponseEntity<ApiResponse<List<PatientAccessRequestDto>>> getAllGrantedRequests(
             @RequestParam Integer organisationId,
             @RequestParam String providerId,
             @RequestParam String tinId) {
 
-        return ResponseEntity.ok(
-                patientAccessRequestService.getGrantedRequests(organisationId, providerId, tinId));
+        return data(patientAccessRequestService.getGrantedRequests(organisationId, providerId, tinId));
     }
 
     @GetMapping("/access-revoked")
-    public ResponseEntity<List<PatientAccessRequestDto>> getAllRevokedRequests(
+    public ResponseEntity<ApiResponse<List<PatientAccessRequestDto>>> getAllRevokedRequests(
             @RequestParam Integer organisationId,
             @RequestParam String providerId,
             @RequestParam String tinId) {
 
-        return ResponseEntity.ok(
-                patientAccessRequestService.getRevokedRequests(organisationId, providerId, tinId));
+        return data(patientAccessRequestService.getRevokedRequests(organisationId, providerId, tinId));
     }
 
     @GetMapping("/request/{requestId}")
-    public ResponseEntity<PatientAccessRequestDto> getAccessRequest(@PathVariable Long requestId) {
+    public ResponseEntity<ApiResponse<PatientAccessRequestDto>> getAccessRequest(
+            @PathVariable Long requestId) {
+
         log.info("Fetching access request: {}", requestId);
 
         PatientAccessRequestDto request = patientAccessRequestService.getAccessRequestById(requestId);
-        return request != null ? ResponseEntity.ok(request) : ResponseEntity.notFound().build();
+        if (request == null) {
+            throw new AppException(
+                    ResponseCode.NOT_FOUND, "No access request found for id " + requestId + ".");
+        }
+
+        return data(request);
     }
 
     @GetMapping("/patient/{patientFhirId}")
-    public ResponseEntity<List<PatientAccessRequestDto>> getPatientAccessRequests(
+    public ResponseEntity<ApiResponse<List<PatientAccessRequestDto>>> getPatientAccessRequests(
             @PathVariable String patientFhirId) {
 
         log.info("Fetching access requests for patient: {}", patientFhirId);
 
-        return ResponseEntity.ok(patientAccessRequestService.getPatientAccessRequests(patientFhirId));
+        return data(patientAccessRequestService.getPatientAccessRequests(patientFhirId));
     }
 
     // ------------------------------------------------------------------ decisions
 
     @PostMapping("/grant-access/{requestId}")
-    public ResponseEntity<AccessRequestResponse> grantAccess(@PathVariable Long requestId) {
+    public ResponseEntity<ApiResponse<PatientAccessRequestDto>> grantAccess(@PathVariable Long requestId) {
         log.info("Granting access for request: {} ", requestId);
 
-        return toResponse(patientAccessAdminService.grantAccess(requestId));
+        return data(ResponseCode.UPDATED, "Access granted successfully",
+                patientAccessAdminService.grantAccess(requestId));
     }
 
     @PostMapping("/revoke-access/{requestId}")
-    public ResponseEntity<AccessRequestResponse> revokeAccess(@PathVariable Long requestId) {
+    public ResponseEntity<ApiResponse<PatientAccessRequestDto>> revokeAccess(@PathVariable Long requestId) {
         log.info("Revoking access for request: {}", requestId);
 
-        return toResponse(patientAccessAdminService.revokeAccess(requestId));
+        return data(ResponseCode.UPDATED, "Access revoked successfully",
+                patientAccessAdminService.revokeAccess(requestId));
     }
 
     // ------------------------------------------------------------------ reporting data
 
     @GetMapping("/data/tin")
-    public ResponseEntity<PatientAccessDataDto> getTinData(
+    public ResponseEntity<ApiResponse<PatientAccessDataDto>> getTinData(
             @RequestParam String tinId,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodStart,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodEnd) {
@@ -112,11 +121,11 @@ public class PatientAccessAdminController {
         log.info("Fetching TIN data for tinId: {} from {} to {}", tinId, reportingPeriodStart, reportingPeriodEnd);
 
         ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-        return ResponseEntity.ok(patientAccessDataService.getTinData(tinId, period.start(), period.end()));
+        return data(patientAccessDataService.getTinData(tinId, period.start(), period.end()));
     }
 
     @GetMapping("/data/clinic-provider")
-    public ResponseEntity<PatientAccessDataDto> getTinProviderData(
+    public ResponseEntity<ApiResponse<PatientAccessDataDto>> getTinProviderData(
             @RequestParam String tinId,
             @RequestParam String providerId,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodStart,
@@ -126,26 +135,26 @@ public class PatientAccessAdminController {
                 tinId, providerId, reportingPeriodStart, reportingPeriodEnd);
 
         ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-        return ResponseEntity.ok(
-                patientAccessDataService.getTinProviderData(tinId, providerId, period.start(), period.end()));
+        return data(patientAccessDataService.getTinProviderData(
+                tinId, providerId, period.start(), period.end()));
     }
 
     @GetMapping("/data/all")
-    public ResponseEntity<List<PatientAccessDataDto>> getAllPatientMetrics(
+    public ResponseEntity<ApiResponse<List<PatientAccessDataDto>>> getAllPatientMetrics(
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodStart,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodEnd) {
 
         log.info("Fetching all patient metrics from {} to {}", reportingPeriodStart, reportingPeriodEnd);
 
         ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-        return ResponseEntity.ok(patientAccessDataService.getAllPatientData(period.start(), period.end()));
+        return data(patientAccessDataService.getAllPatientData(period.start(), period.end()));
     }
 
     // ------------------------------------------------------------------ dashboards
 
-    // Without a tinId the provider's whole caseload counts.
+    /** Without a tinId the provider's whole caseload counts. */
     @GetMapping("/dashboard/patients-with-access")
-    public ResponseEntity<AccessDashboardResponse> getDashboardWithPatientsWithAccess(
+    public ResponseEntity<ApiResponse<AccessDashboardResponse>> getDashboardWithPatientsWithAccess(
             @RequestParam Integer organisationId,
             @RequestParam String providerId,
             @RequestParam(required = false) String tinId,
@@ -156,12 +165,12 @@ public class PatientAccessAdminController {
                 organisationId, providerId, tinId);
 
         ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-        return ResponseEntity.ok(
-                patientAccessAdminService.getProviderDashboard(organisationId, providerId, tinId, period));
+        return data(patientAccessAdminService.getProviderDashboard(
+                organisationId, providerId, tinId, period));
     }
 
     @GetMapping("/dashboard/group-patients-with-access")
-    public ResponseEntity<AccessDashboardResponse> getGroupDashboardWithPatientsWithAccess(
+    public ResponseEntity<ApiResponse<AccessDashboardResponse>> getGroupDashboardWithPatientsWithAccess(
             @RequestParam String tinId,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodStart,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate reportingPeriodEnd) {
@@ -169,15 +178,6 @@ public class PatientAccessAdminController {
         log.info("Fetching group dashboard with patients who have access for group: {}", tinId);
 
         ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-        return ResponseEntity.ok(patientAccessAdminService.getGroupDashboard(tinId, period));
-    }
-
-    // ------------------------------------------------------------------ helpers
-
-    // A refused decision is the caller's problem, so 400.
-    private ResponseEntity<AccessRequestResponse> toResponse(AccessRequestResponse response) {
-        return response.isSuccess()
-                ? ResponseEntity.ok(response)
-                : ResponseEntity.badRequest().body(response);
+        return data(patientAccessAdminService.getGroupDashboard(tinId, period));
     }
 }

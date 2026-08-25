@@ -1,12 +1,13 @@
 package com.onc.G2.service.impl;
 
-import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.entity.PatientAccessRequest;
 import com.onc.G2.enums.RequestStatus;
 import com.onc.G2.enums.RequestType;
 import com.onc.G2.repository.PatientAccessRequestRepository;
 import com.onc.G2.service.PatientAccessRequestService;
+import com.onc.api.support.ResponseCode;
+import com.onc.common.exception.AppException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -101,71 +102,51 @@ public class PatientAccessRequestServiceImpl implements PatientAccessRequestServ
     }
 
     @Override
-    public AccessRequestResponse grantAccess(Long requestId) {
+    public PatientAccessRequestDto grantAccess(Long requestId) {
         log.info("Granting access for request: {}", requestId);
-        
-        Optional<PatientAccessRequest> requestOpt = patientAccessRequestRepository.findById(requestId);
-        if (requestOpt.isEmpty()) {
-            return AccessRequestResponse.builder()
-                    .success(false)
-                    .message("Access request not found")
-                    .build();
-        }
 
-        PatientAccessRequest request = requestOpt.get();
-        if (request.getStatus() != RequestStatus.PENDING) {
-            return AccessRequestResponse.builder()
-                    .success(false)
-                    .message("Request must be in pending status to grant access")
-                    .build();
-        }
+        PatientAccessRequest request = require(requestId);
+        requireStatus(request, RequestStatus.PENDING, "granted");
 
         request.setStatus(RequestStatus.ACCESS_GRANTED);
         request.setAccessGrantedAt(Instant.now());
 
-        patientAccessRequestRepository.save(request);
+        PatientAccessRequest saved = patientAccessRequestRepository.save(request);
         log.info("Granted access for request: {}", requestId);
 
-        return AccessRequestResponse.builder()
-                .success(true)
-                .message("Access granted successfully")
-                .requestId(requestId.toString())
-                .status("ACCESS_GRANTED")
-                .build();
+        return convertToDto(saved);
     }
 
     @Override
-    public AccessRequestResponse revokeAccess(Long requestId) {
+    public PatientAccessRequestDto revokeAccess(Long requestId) {
         log.info("Revoking access for request: {} ", requestId);
-        
-        Optional<PatientAccessRequest> requestOpt = patientAccessRequestRepository.findById(requestId);
-        if (requestOpt.isEmpty()) {
-            return AccessRequestResponse.builder()
-                    .success(false)
-                    .message("Access request not found")
-                    .build();
-        }
 
-        PatientAccessRequest request = requestOpt.get();
-        if (request.getStatus() != RequestStatus.ACCESS_GRANTED) {
-            return AccessRequestResponse.builder()
-                    .success(false)
-                    .message("Request must be in ACCESS_GRANTED status to revoke")
-                    .build();
-        }
+        PatientAccessRequest request = require(requestId);
+        requireStatus(request, RequestStatus.ACCESS_GRANTED, "revoked");
 
         request.setStatus(RequestStatus.ACCESS_REVOKED);
         request.setAccessRevokedAt(Instant.now());
 
-        patientAccessRequestRepository.save(request);
+        PatientAccessRequest saved = patientAccessRequestRepository.save(request);
         log.info("Revoked access for request: {}", requestId);
 
-        return AccessRequestResponse.builder()
-                .success(true)
-                .message("Access revoked successfully")
-                .requestId(requestId.toString())
-                .status("ACCESS_REVOKED")
-                .build();
+        return convertToDto(saved);
+    }
+
+    private PatientAccessRequest require(Long requestId) {
+        return patientAccessRequestRepository.findById(requestId)
+                .orElseThrow(() -> new AppException(
+                        ResponseCode.NOT_FOUND, "No access request found for id " + requestId + "."));
+    }
+
+    /** Names the status the request is actually in - an admin needs it to know what to do next. */
+    private void requireStatus(PatientAccessRequest request, RequestStatus required, String action) {
+        if (request.getStatus() != required) {
+            throw new AppException(
+                    ResponseCode.STATUS_TRANSITION_BLOCKED,
+                    "Only a request in %s status can be %s; this one is %s."
+                            .formatted(required, action, request.getStatus()));
+        }
     }
 
     @Override

@@ -2,6 +2,8 @@ package com.onc.EHR.controller;
 
 import com.onc.EHR.dto.*;
 import com.onc.EHR.service.EHRDataService;
+import com.onc.api.support.ApiResponse;
+import com.onc.api.support.BaseController;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,61 +13,66 @@ import java.util.List;
 /**
  * Vendor-neutral read surface over the EHR provider API.
  *
- * <p>Replaces the vendor-named controller the G2 module carried. Six of its endpoints
- * duplicated the QRDA controller exactly; those remain available on their original QRDA
- * paths for compatibility, and are exposed here too so a module that needs EHR data does
- * not have to reach through a measure-specific controller to get it.
+ * <p>Six of these endpoints duplicate the QRDA controller exactly; those remain available on
+ * their original QRDA paths for compatibility, and are exposed here too so a module that needs
+ * EHR data does not have to reach through a measure-specific controller to get it.
  */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/ehr/data")
-public class EHRDataController {
+public class EHRDataController extends BaseController {
 
     private final EHRDataService ehrDataService;
 
     @GetMapping("/medical-details")
-    public ResponseEntity<MedicalDetailsData> fetchPatientMedicalDetails(@RequestParam String fhirId) {
-        return ehrDataService.fetchPatientMedicalDetails(fhirId);
+    public ResponseEntity<ApiResponse<MedicalDetailsData>> fetchPatientMedicalDetails(
+            @RequestParam String fhirId) {
+        return data(ehrDataService.fetchPatientMedicalDetails(fhirId));
     }
 
     @GetMapping("/personal-details")
-    public ResponseEntity<PersonalDetailsData> fetchPatientPersonalDetails(@RequestParam String fhirId) {
-        return ehrDataService.fetchPatientPersonalDetails(fhirId);
+    public ResponseEntity<ApiResponse<PersonalDetailsData>> fetchPatientPersonalDetails(
+            @RequestParam String fhirId) {
+        return data(ehrDataService.fetchPatientPersonalDetails(fhirId));
     }
 
     @GetMapping("/insurance-details")
-    public ResponseEntity<List<InsuranceDetails>> fetchPatientInsuranceDetails(@RequestParam String fhirId) {
-        return ehrDataService.fetchPatientInsuranceDetails(fhirId);
+    public ResponseEntity<ApiResponse<List<InsuranceDetails>>> fetchPatientInsuranceDetails(
+            @RequestParam String fhirId) {
+        return data(ehrDataService.fetchPatientInsuranceDetails(fhirId));
     }
 
     @GetMapping("/appointment-details")
-    public ResponseEntity<AppointmentData> fetchAppointments(@RequestParam String fhirId,
-                                                             @RequestParam(required = false) String clinicId) {
-        return ehrDataService.fetchAppointments(fhirId, clinicId);
+    public ResponseEntity<ApiResponse<AppointmentData>> fetchAppointments(
+            @RequestParam String fhirId,
+            @RequestParam(required = false) String clinicId) {
+        return data(ehrDataService.fetchAppointments(fhirId, clinicId));
     }
 
     @GetMapping("/doctor-details")
-    public ResponseEntity<DoctorDetailsData> fetchDoctorDetails(@RequestParam int doctorId) {
-        return ehrDataService.fetchDoctorDetails(doctorId);
+    public ResponseEntity<ApiResponse<DoctorDetailsData>> fetchDoctorDetails(@RequestParam int doctorId) {
+        return data(ehrDataService.fetchDoctorDetails(doctorId));
     }
 
     @GetMapping("/soap-details")
-    public ResponseEntity<List<FormData>> fetchSoapDetails(@RequestParam String fhirId) {
-        return ehrDataService.fetchSoapDetails(fhirId);
+    public ResponseEntity<ApiResponse<List<FormData>>> fetchSoapDetails(@RequestParam String fhirId) {
+        return data(ehrDataService.fetchSoapDetails(fhirId));
     }
 
     @GetMapping("/clinic-details")
-    public ResponseEntity<Clinic> fetchClinicDetails(@RequestParam int clinicId) {
-        return ehrDataService.fetchClinicDetails(clinicId);
+    public ResponseEntity<ApiResponse<Clinic>> fetchClinicDetails(@RequestParam int clinicId) {
+        return data(ehrDataService.fetchClinicDetails(clinicId));
     }
 
     @GetMapping("/clinics")
-    public ResponseEntity<List<Clinic>> fetchAllClinicsByOrganisationId(@RequestParam int organisationId) {
-        return ehrDataService.fetchAllClinicsByOrganisationId(organisationId);
+    public ResponseEntity<ApiResponse<List<Clinic>>> fetchAllClinicsByOrganisationId(
+            @RequestParam int organisationId) {
+        return data(ehrDataService.fetchAllClinicsByOrganisationId(organisationId));
     }
 
     @GetMapping("/providers")
-    public ResponseEntity<List<DoctorDetailsData>> fetchAllDoctorsByClinicId(@RequestParam String clinicId) {
-        return ehrDataService.fetchAllDoctorsByClinicId(clinicId);
+    public ResponseEntity<ApiResponse<List<DoctorDetailsData>>> fetchAllDoctorsByClinicId(
+            @RequestParam String clinicId) {
+        return data(ehrDataService.fetchAllDoctorsByClinicId(clinicId));
     }
 }

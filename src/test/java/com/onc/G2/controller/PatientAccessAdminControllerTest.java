@@ -1,7 +1,6 @@
 package com.onc.G2.controller;
 
 import com.jayway.jsonpath.JsonPath;
-import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessDataDto;
 import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.enums.RequestStatus;
@@ -9,6 +8,8 @@ import com.onc.G2.enums.RequestType;
 import com.onc.G2.service.PatientAccessDataService;
 import com.onc.G2.service.PatientAccessRequestService;
 import com.onc.G2.service.impl.PatientAccessAdminServiceImpl;
+import com.onc.api.support.ResponseCode;
+import com.onc.common.exception.AppException;
 import com.onc.config.ConfigurationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -38,7 +39,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Locks in what these endpoints answer. */
+/** Locks in what these endpoints answer. Payloads live under {@code $.data} in the envelope. */
 @WebMvcTest(PatientAccessAdminController.class)
 @Import({ConfigurationService.class, PatientAccessAdminServiceImpl.class})
 class PatientAccessAdminControllerTest {
@@ -75,30 +76,35 @@ class PatientAccessAdminControllerTest {
 
             mockMvc.perform(listing("/pending-requests"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$[0].id").value(1))
-                    .andExpect(jsonPath("$[0].status").value("PENDING"));
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.code").value("ENTITY"))
+                    .andExpect(jsonPath("$.data[0].id").value(1))
+                    .andExpect(jsonPath("$.data[0].status").value("PENDING"));
 
             mockMvc.perform(listing("/access-granted"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$[0].status").value("ACCESS_GRANTED"));
+                    .andExpect(jsonPath("$.data[0].status").value("ACCESS_GRANTED"));
 
             mockMvc.perform(listing("/access-revoked"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$[0].status").value("ACCESS_REVOKED"));
+                    .andExpect(jsonPath("$.data[0].status").value("ACCESS_REVOKED"));
         }
 
         @Test
-        @DisplayName("on failure: 500 with a completely empty body")
-        void listingFailureHasEmptyBody() throws Exception {
+        @DisplayName("on failure: 500 in the envelope, with no trace of the cause")
+        void listingFailureIsEnveloped() throws Exception {
             when(patientAccessRequestService.getPendingRequests(any(), anyString(), anyString()))
                     .thenThrow(new RuntimeException("boom"));
 
             String body = mockMvc.perform(listing("/pending-requests"))
                     .andExpect(status().isInternalServerError())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
+                    .andExpect(jsonPath("$.message").value("Something went wrong. Please try again later."))
+                    .andExpect(jsonPath("$.data").doesNotExist())
                     .andReturn().getResponse().getContentAsString();
 
-            // .build() sends no body at all.
-            assertThat(body).isEmpty();
+            assertThat(body).doesNotContain("boom").doesNotContain("RuntimeException");
         }
 
         private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder listing(String path) {
@@ -114,23 +120,26 @@ class PatientAccessAdminControllerTest {
     class Lookup {
 
         @Test
-        @DisplayName("found: 200 with the request")
+        @DisplayName("found: 200 with the request under data")
         void found() throws Exception {
             when(patientAccessRequestService.getAccessRequestById(5L))
                     .thenReturn(requestDto(5L, RequestStatus.PENDING));
 
             mockMvc.perform(get(BASE + "/request/5"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value(5));
+                    .andExpect(jsonPath("$.data.id").value(5));
         }
 
         @Test
-        @DisplayName("missing: 404, because the service returns null")
+        @DisplayName("missing: 404 naming the id, because the service returns null")
         void notFound() throws Exception {
             when(patientAccessRequestService.getAccessRequestById(404L)).thenReturn(null);
 
             mockMvc.perform(get(BASE + "/request/404"))
-                    .andExpect(status().isNotFound());
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.code").value("NOT_FOUND"))
+                    .andExpect(jsonPath("$.message").value("No access request found for id 404."));
         }
 
         @Test
@@ -141,7 +150,7 @@ class PatientAccessAdminControllerTest {
 
             mockMvc.perform(get(BASE + "/patient/" + FHIR_ID))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$[0].id").value(6));
+                    .andExpect(jsonPath("$.data[0].id").value(6));
         }
     }
 
@@ -157,18 +166,17 @@ class PatientAccessAdminControllerTest {
             Instant requestedAt = Instant.parse("2026-03-01T09:00:00Z");
             Instant grantedAt = Instant.parse("2026-03-02T09:00:00Z");
 
-            when(patientAccessRequestService.grantAccess(5L))
-                    .thenReturn(response(true, "Access granted successfully", "ACCESS_GRANTED", "5"));
-
             PatientAccessRequestDto dto = requestDto(5L, RequestStatus.ACCESS_GRANTED);
             dto.setRequestedAt(requestedAt);
             dto.setAccessGrantedAt(grantedAt);
-            when(patientAccessRequestService.getAccessRequestById(5L)).thenReturn(dto);
+            when(patientAccessRequestService.grantAccess(5L)).thenReturn(dto);
 
             mockMvc.perform(post(BASE + "/grant-access/5"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
-                    .andExpect(jsonPath("$.status").value("ACCESS_GRANTED"));
+                    .andExpect(jsonPath("$.code").value("UPDATED"))
+                    .andExpect(jsonPath("$.message").value("Access granted successfully"))
+                    .andExpect(jsonPath("$.data.status").value("ACCESS_GRANTED"));
 
             verify(patientAccessDataService).initializePatientData(
                     eq(FHIR_ID), eq("3456"), eq("Ada"), eq("Lovelace"), eq(7),
@@ -188,13 +196,10 @@ class PatientAccessAdminControllerTest {
         void grantFallsBackToGrantedAt() throws Exception {
             Instant grantedAt = Instant.parse("2026-04-02T09:00:00Z");
 
-            when(patientAccessRequestService.grantAccess(6L))
-                    .thenReturn(response(true, "ok", "ACCESS_GRANTED", "6"));
-
             PatientAccessRequestDto dto = requestDto(6L, RequestStatus.ACCESS_GRANTED);
             dto.setRequestedAt(null);
             dto.setAccessGrantedAt(grantedAt);
-            when(patientAccessRequestService.getAccessRequestById(6L)).thenReturn(dto);
+            when(patientAccessRequestService.grantAccess(6L)).thenReturn(dto);
 
             mockMvc.perform(post(BASE + "/grant-access/6")).andExpect(status().isOk());
 
@@ -203,29 +208,49 @@ class PatientAccessAdminControllerTest {
         }
 
         @Test
-        @DisplayName("service refuses: 400 with the service's message, no counter updates")
+        @DisplayName("wrong status: 409 naming the status it is in, no counter updates")
         void grantRejected() throws Exception {
-            when(patientAccessRequestService.grantAccess(7L))
-                    .thenReturn(response(false, "Request must be in pending status to grant access", null, null));
+            when(patientAccessRequestService.grantAccess(7L)).thenThrow(new AppException(
+                    ResponseCode.STATUS_TRANSITION_BLOCKED,
+                    "Only a request in PENDING status can be granted; this one is ACCESS_GRANTED."));
 
             mockMvc.perform(post(BASE + "/grant-access/7"))
-                    .andExpect(status().isBadRequest())
+                    .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.success").value(false))
-                    .andExpect(jsonPath("$.message").value("Request must be in pending status to grant access"));
+                    .andExpect(jsonPath("$.code").value("STATUS_TRANSITION_BLOCKED"))
+                    .andExpect(jsonPath("$.message").value(
+                            "Only a request in PENDING status can be granted; this one is ACCESS_GRANTED."));
 
             verify(patientAccessDataService, never())
                     .updateNumerator(anyString(), any(), any(), anyBoolean(), any());
         }
 
         @Test
-        @DisplayName("throws: 500 with a message body")
+        @DisplayName("unknown request: 404, no counter updates")
+        void grantUnknown() throws Exception {
+            when(patientAccessRequestService.grantAccess(anyLong())).thenThrow(new AppException(
+                    ResponseCode.NOT_FOUND, "No access request found for id 8."));
+
+            mockMvc.perform(post(BASE + "/grant-access/8"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+
+            verify(patientAccessDataService, never())
+                    .updateNumerator(anyString(), any(), any(), anyBoolean(), any());
+        }
+
+        @Test
+        @DisplayName("unexpected failure: 500 that does not name the operation or the cause")
         void grantThrows() throws Exception {
             when(patientAccessRequestService.grantAccess(anyLong())).thenThrow(new RuntimeException("boom"));
 
-            mockMvc.perform(post(BASE + "/grant-access/8"))
+            String body = mockMvc.perform(post(BASE + "/grant-access/9"))
                     .andExpect(status().isInternalServerError())
                     .andExpect(jsonPath("$.success").value(false))
-                    .andExpect(jsonPath("$.message").value("Error granting access: boom"));
+                    .andExpect(jsonPath("$.message").value("Something went wrong. Please try again later."))
+                    .andReturn().getResponse().getContentAsString();
+
+            assertThat(body).doesNotContain("boom").doesNotContain("granting");
         }
     }
 
@@ -237,25 +262,26 @@ class PatientAccessAdminControllerTest {
         @DisplayName("success: decrements the numerator for the request's period")
         void revokeDecrements() throws Exception {
             when(patientAccessRequestService.revokeAccess(9L))
-                    .thenReturn(response(true, "Access revoked successfully", "ACCESS_REVOKED", "9"));
-            when(patientAccessRequestService.getAccessRequestById(9L))
                     .thenReturn(requestDto(9L, RequestStatus.ACCESS_REVOKED));
 
             mockMvc.perform(post(BASE + "/revoke-access/9"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.status").value("ACCESS_REVOKED"));
+                    .andExpect(jsonPath("$.message").value("Access revoked successfully"))
+                    .andExpect(jsonPath("$.data.status").value("ACCESS_REVOKED"));
 
             verify(patientAccessDataService).decrementNumerator(FHIR_ID, PERIOD_START, PERIOD_END);
         }
 
         @Test
-        @DisplayName("service refuses: 400 and no decrement")
+        @DisplayName("wrong status: 409 and no decrement")
         void revokeRejected() throws Exception {
-            when(patientAccessRequestService.revokeAccess(10L))
-                    .thenReturn(response(false, "Request must be in ACCESS_GRANTED status to revoke", null, null));
+            when(patientAccessRequestService.revokeAccess(10L)).thenThrow(new AppException(
+                    ResponseCode.STATUS_TRANSITION_BLOCKED,
+                    "Only a request in ACCESS_GRANTED status can be revoked; this one is PENDING."));
 
             mockMvc.perform(post(BASE + "/revoke-access/10"))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("STATUS_TRANSITION_BLOCKED"));
 
             verify(patientAccessDataService, never()).decrementNumerator(anyString(), any(), any());
         }
@@ -282,8 +308,8 @@ class PatientAccessAdminControllerTest {
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-12-31"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.denominatorCount").value(4))
-                    .andExpect(jsonPath("$.percentage").value(75.0));
+                    .andExpect(jsonPath("$.data.denominatorCount").value(4))
+                    .andExpect(jsonPath("$.data.percentage").value(75.0));
         }
 
         @Test
@@ -300,7 +326,7 @@ class PatientAccessAdminControllerTest {
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-12-31"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.numeratorCount").value(1));
+                    .andExpect(jsonPath("$.data.numeratorCount").value(1));
         }
 
         @Test
@@ -313,17 +339,19 @@ class PatientAccessAdminControllerTest {
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-12-31"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.length()").value(2));
+                    .andExpect(jsonPath("$.data.length()").value(2));
         }
 
         @Test
-        @DisplayName("dates use yyyy-MM-dd; a yyyy-dd-MM value is rejected")
+        @DisplayName("dates use yyyy-MM-dd; a yyyy-dd-MM value is rejected by name")
         void rejectsTransposedDate() throws Exception {
             // yyyy-dd-MM would accept this; yyyy-MM-dd must not.
             mockMvc.perform(get(BASE + "/data/all")
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-31-12"))
-                    .andExpect(status().is4xxClientError());
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("BAD_REQUEST"))
+                    .andExpect(jsonPath("$.errors.reportingPeriodEnd").exists());
         }
     }
 
@@ -334,7 +362,7 @@ class PatientAccessAdminControllerTest {
     class Dashboards {
 
         @Test
-        @DisplayName("per-provider: totals, percentage and exact key order")
+        @DisplayName("per-provider: totals, percentage and exact key order inside data")
         void providerDashboard() throws Exception {
             when(patientAccessDataService.getAccessGrantedPatientsFiltered(7, "prov-9", "tin-9", PERIOD_START, PERIOD_END))
                     .thenReturn(List.of(dataDto(1, 1), dataDto(1, 0)));
@@ -346,15 +374,15 @@ class PatientAccessAdminControllerTest {
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-12-31"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.totalDenominator").value(2))
-                    .andExpect(jsonPath("$.totalNumerator").value(1))
-                    .andExpect(jsonPath("$.percentage").value(50.0))
-                    .andExpect(jsonPath("$.reportingPeriodStart").value("2026-01-01"))
-                    .andExpect(jsonPath("$.reportingPeriodEnd").value("2026-12-31"))
+                    .andExpect(jsonPath("$.data.totalDenominator").value(2))
+                    .andExpect(jsonPath("$.data.totalNumerator").value(1))
+                    .andExpect(jsonPath("$.data.percentage").value(50.0))
+                    .andExpect(jsonPath("$.data.reportingPeriodStart").value("2026-01-01"))
+                    .andExpect(jsonPath("$.data.reportingPeriodEnd").value("2026-12-31"))
                     .andReturn().getResponse().getContentAsString();
 
-            // Key order is part of what consumers see, so it is pinned.
-            assertThat(topLevelKeys(body)).containsExactly(
+            // Key order within the payload is part of what consumers see, so it is pinned.
+            assertThat(keysOf(body, "$.data")).containsExactly(
                     "patientsWithAccess", "reportingPeriodStart", "reportingPeriodEnd",
                     "totalNumerator", "totalDenominator", "percentage");
         }
@@ -370,11 +398,11 @@ class PatientAccessAdminControllerTest {
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-12-31"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.groupId").value("tin-9"))
-                    .andExpect(jsonPath("$.percentage").value(100.0))
+                    .andExpect(jsonPath("$.data.groupId").value("tin-9"))
+                    .andExpect(jsonPath("$.data.percentage").value(100.0))
                     .andReturn().getResponse().getContentAsString();
 
-            assertThat(topLevelKeys(body)).containsExactly(
+            assertThat(keysOf(body, "$.data")).containsExactly(
                     "groupId", "patientsWithAccess", "reportingPeriodStart", "reportingPeriodEnd",
                     "totalNumerator", "totalDenominator", "percentage");
         }
@@ -392,8 +420,8 @@ class PatientAccessAdminControllerTest {
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-12-31"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.percentage").value(0.0))
-                    .andExpect(jsonPath("$.totalDenominator").value(0));
+                    .andExpect(jsonPath("$.data.percentage").value(0.0))
+                    .andExpect(jsonPath("$.data.totalDenominator").value(0));
         }
 
         @Test
@@ -408,16 +436,16 @@ class PatientAccessAdminControllerTest {
                             .param("reportingPeriodStart", "2026-01-01")
                             .param("reportingPeriodEnd", "2026-12-31"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.totalNumerator").value(1));
+                    .andExpect(jsonPath("$.data.totalNumerator").value(1));
         }
     }
 
     // ------------------------------------------------------------------ fixtures
 
-    /** Top-level keys, in the order they appear. */
+    /** Keys at the given path, in the order they appear. */
     @SuppressWarnings("unchecked")
-    private List<String> topLevelKeys(String json) {
-        return List.copyOf(((Map<String, Object>) JsonPath.parse(json).read("$", Map.class)).keySet());
+    private List<String> keysOf(String json, String path) {
+        return List.copyOf(((Map<String, Object>) JsonPath.parse(json).read(path, Map.class)).keySet());
     }
 
     private PatientAccessRequestDto requestDto(Long id, RequestStatus status) {
@@ -443,14 +471,5 @@ class PatientAccessAdminControllerTest {
         dto.setDenominatorCount(denominator);
         dto.setNumeratorCount(numerator);
         return dto;
-    }
-
-    private AccessRequestResponse response(boolean success, String message, String status, String requestId) {
-        return AccessRequestResponse.builder()
-                .success(success)
-                .message(message)
-                .status(status)
-                .requestId(requestId)
-                .build();
     }
 }
