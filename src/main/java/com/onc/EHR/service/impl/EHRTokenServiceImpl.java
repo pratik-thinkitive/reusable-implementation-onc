@@ -1,7 +1,7 @@
 package com.onc.EHR.service.impl;
 
 import com.onc.EHR.dto.TokenResponse;
-import com.onc.EHR.service.EhrTokenService;
+import com.onc.EHR.service.EHRTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -18,7 +18,7 @@ import org.springframework.web.client.RestTemplate;
  */
 @Service
 @RequiredArgsConstructor
-public class EhrTokenServiceImpl implements EhrTokenService {
+public class EHRTokenServiceImpl implements EHRTokenService {
 
     @Value("${ehr.token.url}")
     private String tokenUrl;

@@ -2,7 +2,7 @@ package com.onc.QRDA.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onc.EHR.dto.*;
-import com.onc.EHR.service.EhrDataService;
+import com.onc.EHR.service.EHRDataService;
 import com.onc.QRDA.service.QRDACMSService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,7 +54,7 @@ public class QRDACMSServiceImpl implements QRDACMSService {
     private String legalAuthenticatorOrganizationName;
 
     private final ObjectMapper objectMapper;
-    private final EhrDataService ehrDataService;
+    private final EHRDataService ehrDataService;
 
 
     @Override
@@ -70,7 +70,7 @@ public class QRDACMSServiceImpl implements QRDACMSService {
     }
 
     // ---------------------------------------------------------------------------
-    // EHR reads. Thin pass-throughs to the shared EhrDataService so QRDA and G2 share
+    // EHR reads. Thin pass-throughs to the shared EHRDataService so QRDA and G2 share
     // one implementation; the endpoints this exposes are unchanged.
     // ---------------------------------------------------------------------------
 

@@ -1,7 +1,7 @@
 package com.onc.EHR.controller;
 
 import com.onc.EHR.dto.*;
-import com.onc.EHR.service.EhrDataService;
+import com.onc.EHR.service.EHRDataService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,9 +19,9 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/ehr/data")
-public class EhrDataController {
+public class EHRDataController {
 
-    private final EhrDataService ehrDataService;
+    private final EHRDataService ehrDataService;
 
     @GetMapping("/medical-details")
     public ResponseEntity<MedicalDetailsData> fetchPatientMedicalDetails(@RequestParam String fhirId) {

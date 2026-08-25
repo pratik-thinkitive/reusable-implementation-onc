@@ -2,8 +2,8 @@ package com.onc.EHR.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onc.EHR.dto.*;
-import com.onc.EHR.service.EhrDataService;
-import com.onc.EHR.service.EhrTokenService;
+import com.onc.EHR.service.EHRDataService;
+import com.onc.EHR.service.EHRTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,14 +29,14 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class EhrDataServiceImpl implements EhrDataService {
+public class EHRDataServiceImpl implements EHRDataService {
 
     @Value("${ehr.api.base-url}")
     private String apiBaseUrl;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final EhrTokenService tokenService;
+    private final EHRTokenService tokenService;
 
     /** Builds the authenticated GET entity every read shares. */
     private HttpEntity<Void> authorizedRequest() {

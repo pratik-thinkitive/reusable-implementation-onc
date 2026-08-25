@@ -16,7 +16,7 @@ import java.util.List;
  * status is passed through with a null body, an empty collection yields {@code noContent},
  * and any failure becomes a 500.
  */
-public interface EhrDataService {
+public interface EHRDataService {
 
     ResponseEntity<MedicalDetailsData> fetchPatientMedicalDetails(String fhirId);
 
