@@ -1,6 +1,6 @@
 package com.onc.QRDA.service;
 
-import com.onc.QRDA.dto.*;
+import com.onc.EHR.dto.*;
 import org.springframework.http.ResponseEntity;
 
 import java.io.IOException;

@@ -1,6 +1,6 @@
 package com.onc.QRDA.controller;
 
-import com.onc.QRDA.dto.*;
+import com.onc.EHR.dto.*;
 import com.onc.QRDA.service.QRDACMSService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

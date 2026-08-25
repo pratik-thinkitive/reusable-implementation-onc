@@ -17,7 +17,11 @@ public class ConfigurationService {
     @Bean
     public ObjectMapper objectMapper() {
         return new ObjectMapper()
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                // Multi-valued demographics (race, ethnicity, preferred language) are declared
+                // as lists. Providers vary in whether they send a bare string or an array for
+                // a single value, so accept both rather than failing on the scalar form.
+                .configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true);
     }
 
 }

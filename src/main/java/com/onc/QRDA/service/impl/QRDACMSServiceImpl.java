@@ -1,9 +1,9 @@
 package com.onc.QRDA.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.onc.QRDA.dto.*;
+import com.onc.EHR.dto.*;
+import com.onc.EHR.service.EhrDataService;
 import com.onc.QRDA.service.QRDACMSService;
-import com.onc.QRDA.service.QRDATokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openhealthtools.mdht.uml.cda.*;
@@ -39,9 +39,6 @@ public class QRDACMSServiceImpl implements QRDACMSService {
     @Value("${fhir.base-url}")
     private String baseUrl;
 
-    @Value("${ehr.api.base-url}")
-    private String apiBaseUrl;
-
     // Vendor identity stamped into the generated QRDA XML. Deployment-specific, so it is
     // configuration rather than a hardcoded name. Defaults reproduce the previous output exactly.
     @Value("${qrda.vendor.manufacturer-model-name:EHR }")
@@ -56,9 +53,8 @@ public class QRDACMSServiceImpl implements QRDACMSService {
     @Value("${qrda.legal-authenticator.organization-name:EHR}")
     private String legalAuthenticatorOrganizationName;
 
-    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final QRDATokenService tokenService;
+    private final EhrDataService ehrDataService;
 
 
     @Override
@@ -73,322 +69,60 @@ public class QRDACMSServiceImpl implements QRDACMSService {
         return new ResponseEntity<>(xmlBytes, headers, HttpStatus.OK);
     }
 
+    // ---------------------------------------------------------------------------
+    // EHR reads. Thin pass-throughs to the shared EhrDataService so QRDA and G2 share
+    // one implementation; the endpoints this exposes are unchanged.
+    // ---------------------------------------------------------------------------
+
     @Override
     public ResponseEntity<MedicalDetailsData> fetchPatientMedicalDetails(String fhirId) {
-        try {
-            String patientId = extractPatientId(fhirId);
-            if (patientId == null) {
-                return ResponseEntity.badRequest().body(null);
-            }
-
-            String token = tokenService.getAccessToken();
-
-            String url = apiBaseUrl + "/medical-details?patient_id=" + patientId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                return ResponseEntity.status(response.getStatusCode()).body(null);
-            }
-
-            MedicalDetailsResponse dto = objectMapper.readValue(response.getBody(), MedicalDetailsResponse.class);
-
-            return ResponseEntity.ok(dto.getData());
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
+        return ehrDataService.fetchPatientMedicalDetails(fhirId);
     }
 
     @Override
     public ResponseEntity<PersonalDetailsData> fetchPatientPersonalDetails(String fhirId) {
-        ResponseEntity<String> response = null;
-        try {
-            String patientId = extractPatientId(fhirId);
-            if (patientId == null) {
-                return ResponseEntity.badRequest().body(null);
-            }
-
-            String token = tokenService.getAccessToken();
-
-            String url = apiBaseUrl + "/personal-details?patient_id=" + patientId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                return ResponseEntity.status(response.getStatusCode()).body(null);
-            }
-
-            com.onc.QRDA.dto.PersonalDetailsResponse pdDTO = objectMapper.readValue(response.getBody(), com.onc.QRDA.dto.PersonalDetailsResponse.class);
-
-            PersonalDetailsData data = null;
-            if (pdDTO.getData() != null) {
-                PersonalDetailsData detailsData = pdDTO.getData();
-                data = PersonalDetailsData.builder()
-                        .submissionId(detailsData.getSubmissionId())
-                        .patientId(detailsData.getPatientId())
-                        .organisationId(detailsData.getOrganisationId())
-                        .createdBy(detailsData.getCreatedBy())
-                        .updatedBy(detailsData.getUpdatedBy())
-                        .createdAt(detailsData.getCreatedAt())
-                        .updatedAt(detailsData.getUpdatedAt())
-                        .appointmentId(detailsData.getAppointmentId())
-                        .formName(detailsData.getFormName())
-                        .templateName(detailsData.getTemplateName())
-                        .digestDefinitionId(detailsData.getDigestDefinitionId())
-                        .complete(detailsData.isComplete())
-                        .metadata(detailsData.getMetadata())
-                        .response(detailsData.getResponse())
-                        .uniqueFormId(detailsData.getUniqueFormId())
-                        .version(detailsData.getVersion())
-                        .billerMailSent(detailsData.isBillerMailSent())
-                        .mandatoryFieldsCompleted(detailsData.isMandatoryFieldsCompleted())
-                        .updatedByUserName(detailsData.getUpdatedByUserName())
-                        .caseId(detailsData.getCaseId())
-                        .specialty(detailsData.getSpecialty())
-                        .build();
-            }
-
-            PersonalDetailsResponse dto = PersonalDetailsResponse.builder()
-                    .code(pdDTO.getCode())
-                    .message(pdDTO.getMessage())
-                    .data(data)
-                    .build();
-
-            return ResponseEntity.ok(dto.getData());
-
-        } catch (Exception e) {
-            log.error("Failed to fetch personal details. Response: {}", response != null ? response.getBody() : "null", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
-    }
-
-
-    private ResponseEntity<FormData> fetchFormDataBySubmissionId(String submissionId) {
-        try {
-            String token = tokenService.getAccessToken();
-
-            String url = apiBaseUrl + "/form-data/" + submissionId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                return ResponseEntity.status(response.getStatusCode()).body(null);
-            }
-
-            FormDataResponse dto = objectMapper.readValue(response.getBody(), FormDataResponse.class);
-            return ResponseEntity.ok(dto.getData());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
+        return ehrDataService.fetchPatientPersonalDetails(fhirId);
     }
 
     @Override
     public ResponseEntity<List<InsuranceDetails>> fetchPatientInsuranceDetails(String fhirId) {
-        try {
-            String patientId = extractPatientId(fhirId);
-            if (patientId == null) {
-                return ResponseEntity.badRequest().build();
-            }
-
-            String token = tokenService.getAccessToken();
-
-            String url = apiBaseUrl + "/insurance/cards?patient_id=" + patientId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                return ResponseEntity.status(response.getStatusCode()).build();
-            }
-
-            InsuranceDetailsResponse dto = objectMapper.readValue(response.getBody(), InsuranceDetailsResponse.class);
-
-            if (dto.getData() == null || dto.getData().isEmpty()) {
-                return ResponseEntity.noContent().build();
-            }
-
-            return ResponseEntity.ok(dto.getData());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ehrDataService.fetchPatientInsuranceDetails(fhirId);
     }
 
     @Override
     public ResponseEntity<DoctorDetailsData> fetchDoctorDetails(int doctorId) {
-        try {
-            String token = tokenService.getAccessToken();
-
-            String url = apiBaseUrl + "/doctor/" + doctorId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                return ResponseEntity.status(response.getStatusCode()).body(null);
-            }
-
-            DoctorDetailsResponse dto = objectMapper.readValue(response.getBody(), DoctorDetailsResponse.class);
-
-            return ResponseEntity.ok(dto.getData());
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
+        return ehrDataService.fetchDoctorDetails(doctorId);
     }
-
 
     @Override
     public ResponseEntity<List<FormData>> fetchSoapDetails(String fhirId) {
-        ResponseEntity<String> response = null;
-        try {
-            String patientId = extractPatientId(fhirId);
-            if (patientId == null) {
-                return ResponseEntity.badRequest().body(null);
-            }
-
-            String token = tokenService.getAccessToken();
-
-            String soapUrl = apiBaseUrl + "/soap-context?patient_id=" + patientId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            response = restTemplate.exchange(soapUrl, HttpMethod.GET, request, String.class);
-
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                return ResponseEntity.status(response.getStatusCode()).body(null);
-            }
-
-            SoapContextResponse soapContextResponse = objectMapper.readValue(response.getBody(), SoapContextResponse.class);
-
-            if (soapContextResponse.getData() == null || soapContextResponse.getData().getContexts().isEmpty()) {
-                return ResponseEntity.noContent().build();
-            }
-
-            List<FormData> assessments = new ArrayList<>();
-
-            for (SoapContext context : soapContextResponse.getData().getContexts()) {
-                if (context.getAssessmentSubmissionId() != null) {
-                    String assessmentUrl = apiBaseUrl + "/form-data/" + context.getAssessmentSubmissionId();
-
-                    ResponseEntity<String> assessmentResponse = restTemplate.exchange(assessmentUrl, HttpMethod.GET, request, String.class);
-
-                    if (assessmentResponse.getStatusCode().is2xxSuccessful() && assessmentResponse.getBody() != null) {
-                        FormDataResponse assessmentDto = objectMapper.readValue(assessmentResponse.getBody(), FormDataResponse.class);
-
-                        if (assessmentDto.getData() != null) {
-                            FormData details = assessmentDto.getData();
-
-                            FormData formData = FormData.builder()
-                                    //.createdDate(details.getCreatedDate())
-                                    //.updatedDate(details.getUpdatedDate())
-                                    .submissionId(details.getSubmissionId())
-                                    .patientId(details.getPatientId())
-                                    .organisationId(details.getOrganisationId())
-                                    .createdBy(details.getCreatedBy())
-                                    //.updatedBy(details.getUpdatedBy())
-                                    //.createdAt(details.getCreatedAt())
-                                    //.updatedAt(details.getUpdatedAt())
-                                    .appointmentId(details.getAppointmentId())
-                                    .formName(details.getFormName())
-                                    //.templateName(details.getTemplateName())
-                                    //.digestDefinitionId(details.getDigestDefinitionId())
-                                    .response(details.getResponse())
-                                    //.category(details.getCategory())
-                                    //.version(details.getVersion())
-                                    //.updatedByUserName(details.getUpdatedByUserName())
-                                    //.metadata(details.getMetadata())
-                                    .build();
-
-                            assessments.add(formData);
-                        }
-                    }
-                }
-            }
-
-            if (assessments.isEmpty()) {
-                return ResponseEntity.noContent().build();
-            }
-
-            return ResponseEntity.ok(assessments);
-
-        } catch (Exception e) {
-            log.error("Failed to fetch SOAP details. Response: {}", response != null ? response.getBody() : "null", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
+        return ehrDataService.fetchSoapDetails(fhirId);
     }
 
-
+    @Override
     public ResponseEntity<AppointmentData> fetchAppointments(String fhirId, String clinicId) {
-        try {
-            String patientId = extractPatientId(fhirId);
-            if (patientId == null) {
-                return ResponseEntity.badRequest().body(null);
-            }
-
-            String token = tokenService.getAccessToken();
-
-            String url = UriComponentsBuilder.fromUriString(apiBaseUrl)
-                    .path("/appointment")
-                    .queryParam("start_date", "2023-01-01T00:00:00.000Z")    //  2022-01-01T00:00:00.000Z
-                    .queryParam("end_date", "2025-12-31T00:00:00.000Z")
-                    .queryParam("patient_id", patientId)
-                    .queryParam("sort", "asc")
-                    .queryParam("clinic_id", clinicId)
-                    .toUriString();
-
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                return ResponseEntity.status(response.getStatusCode()).body(null);
-            }
-
-            AppointmentResponse dto = objectMapper.readValue(response.getBody(), AppointmentResponse.class);
-
-            return ResponseEntity.ok(dto.getData());
-
-        } catch (Exception e) {
-            System.err.println("An error occurred while fetching appointments: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
+        return ehrDataService.fetchAppointments(fhirId, clinicId);
     }
-
 
     public String extractPatientId(String patientFhirId) {
+        return ehrDataService.extractPatientId(patientFhirId);
+    }
 
-        if (patientFhirId == null || !patientFhirId.contains("-")) {
+    /**
+     * First populated entry of a multi-valued demographic.
+     *
+     * <p>Race, ethnicity and preferred language are lists because a patient may report more
+     * than one. CDA carries a single {@code raceCode}/{@code ethnicGroupCode}, so the first
+     * value is the one written; for the single-valued data this previously read, the result
+     * is identical.
+     */
+    private String firstValue(List<String> values) {
+        if (CollectionUtils.isEmpty(values)) {
             return null;
         }
-        String[] parts = patientFhirId.split("-");
-        return parts.length > 1 ? parts[1] : null;
-
+        return values.stream().filter(StringUtils::hasText).findFirst().orElse(null);
     }
+
 
     @Override
     public String getQrdaXml(String fhirId) {
@@ -682,8 +416,9 @@ public class QRDACMSServiceImpl implements QRDACMSService {
         if (Objects.nonNull(patientData) && Objects.nonNull(patientData.getResponse()) && !CollectionUtils.isEmpty(patientData.getResponse().getPatientInformation())) {
             Map<String, PatientInformation> patientInfoMap = patientData.getResponse().getPatientInformation();
             PatientInformation patientInfo = patientInfoMap.values().stream().filter(Objects::nonNull).findFirst().orElse(null);
-            if (Objects.nonNull(patientInfo) && StringUtils.hasText(patientInfo.getRace())) {
-                String race = patientInfo.getRace().toLowerCase();
+            String rawRace = firstValue(Objects.nonNull(patientInfo) ? patientInfo.getRace() : null);
+            if (StringUtils.hasText(rawRace)) {
+                String race = rawRace.toLowerCase();
                 switch (race) {
                     case "white":
                         raceCode.setCode("2106-3");
@@ -716,8 +451,9 @@ public class QRDACMSServiceImpl implements QRDACMSService {
         if (Objects.nonNull(patientData) && Objects.nonNull(patientData.getResponse()) && Objects.nonNull(patientData.getResponse().getPatientInformation())) {
             Map<String, PatientInformation> patientInfoMap = patientData.getResponse().getPatientInformation();
             PatientInformation patientInfo = patientInfoMap.values().stream().filter(Objects::nonNull).findFirst().orElse(null);
-            if (Objects.nonNull(patientInfo) && StringUtils.hasText(patientInfo.getEthnicity())) {
-                String ethnicity = patientInfo.getEthnicity().trim();
+            String rawEthnicity = firstValue(Objects.nonNull(patientInfo) ? patientInfo.getEthnicity() : null);
+            if (StringUtils.hasText(rawEthnicity)) {
+                String ethnicity = rawEthnicity.trim();
                 if (ethnicity.equalsIgnoreCase("hispanic") || ethnicity.equalsIgnoreCase("latino")  || ethnicity.equalsIgnoreCase("hispanic or latino") ) {
                     ethnicityCode.setCode("2135-2"); // Hispanic or Latino
                 } else {
