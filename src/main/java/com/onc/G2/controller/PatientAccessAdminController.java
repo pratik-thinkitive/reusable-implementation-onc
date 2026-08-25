@@ -11,7 +11,6 @@ import com.onc.G2.service.PatientAccessRequestService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,8 +25,8 @@ import java.util.List;
 /**
  * Administrator endpoints for reviewing access requests and reading measure performance.
  *
- * <p>Reads the request, calls a service, maps the answer to a status code. Anything that decides
- * <em>what should happen</em> lives in {@link PatientAccessAdminService}.
+ * <p>Only describes the successful path. Failures are turned into responses by
+ * {@link com.onc.G2.exception.G2ExceptionHandler}.
  */
 @RequiredArgsConstructor
 @RestController
@@ -51,13 +50,8 @@ public class PatientAccessAdminController {
         log.info("Fetching pending requests for orgId: {}, providerId: {}, tinId: {}",
                 organisationId, providerId, tinId);
 
-        try {
-            return ResponseEntity.ok(
-                    patientAccessRequestService.getPendingRequests(organisationId, providerId, tinId));
-        } catch (Exception e) {
-            log.error("Error fetching pending requests", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(
+                patientAccessRequestService.getPendingRequests(organisationId, providerId, tinId));
     }
 
     /** Requests that were approved. */
@@ -67,13 +61,8 @@ public class PatientAccessAdminController {
             @RequestParam String providerId,
             @RequestParam String tinId) {
 
-        try {
-            return ResponseEntity.ok(
-                    patientAccessRequestService.getGrantedRequests(organisationId, providerId, tinId));
-        } catch (Exception e) {
-            log.error("Error fetching granted requests", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(
+                patientAccessRequestService.getGrantedRequests(organisationId, providerId, tinId));
     }
 
     /** Requests whose access was later withdrawn. */
@@ -83,13 +72,8 @@ public class PatientAccessAdminController {
             @RequestParam String providerId,
             @RequestParam String tinId) {
 
-        try {
-            return ResponseEntity.ok(
-                    patientAccessRequestService.getRevokedRequests(organisationId, providerId, tinId));
-        } catch (Exception e) {
-            log.error("Error fetching revoked requests", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(
+                patientAccessRequestService.getRevokedRequests(organisationId, providerId, tinId));
     }
 
     /** A single request by its id. */
@@ -97,13 +81,8 @@ public class PatientAccessAdminController {
     public ResponseEntity<PatientAccessRequestDto> getAccessRequest(@PathVariable Long requestId) {
         log.info("Fetching access request: {}", requestId);
 
-        try {
-            PatientAccessRequestDto request = patientAccessRequestService.getAccessRequestById(requestId);
-            return request != null ? ResponseEntity.ok(request) : ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.error("Error fetching access request: {}", requestId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        PatientAccessRequestDto request = patientAccessRequestService.getAccessRequestById(requestId);
+        return request != null ? ResponseEntity.ok(request) : ResponseEntity.notFound().build();
     }
 
     /** Every request belonging to one patient. */
@@ -113,12 +92,7 @@ public class PatientAccessAdminController {
 
         log.info("Fetching access requests for patient: {}", patientFhirId);
 
-        try {
-            return ResponseEntity.ok(patientAccessRequestService.getPatientAccessRequests(patientFhirId));
-        } catch (Exception e) {
-            log.error("Error fetching access requests for patient: {}", patientFhirId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return ResponseEntity.ok(patientAccessRequestService.getPatientAccessRequests(patientFhirId));
     }
 
     // ------------------------------------------------------------------ decisions
@@ -128,16 +102,7 @@ public class PatientAccessAdminController {
     public ResponseEntity<AccessRequestResponse> grantAccess(@PathVariable Long requestId) {
         log.info("Granting access for request: {} ", requestId);
 
-        try {
-            AccessRequestResponse response = patientAccessAdminService.grantAccess(requestId);
-            return response.isSuccess()
-                    ? ResponseEntity.ok(response)
-                    : ResponseEntity.badRequest().body(response);
-        } catch (Exception e) {
-            log.error("Error granting access for request: {}", requestId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(errorResponse("Error granting access: " + e.getMessage()));
-        }
+        return toResponse(patientAccessAdminService.grantAccess(requestId));
     }
 
     /** Withdraws access that was previously granted. */
@@ -145,16 +110,7 @@ public class PatientAccessAdminController {
     public ResponseEntity<AccessRequestResponse> revokeAccess(@PathVariable Long requestId) {
         log.info("Revoking access for request: {}", requestId);
 
-        try {
-            AccessRequestResponse response = patientAccessAdminService.revokeAccess(requestId);
-            return response.isSuccess()
-                    ? ResponseEntity.ok(response)
-                    : ResponseEntity.badRequest().body(response);
-        } catch (Exception e) {
-            log.error("Error revoking access for request: {}", requestId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(errorResponse("Error revoking access: " + e.getMessage()));
-        }
+        return toResponse(patientAccessAdminService.revokeAccess(requestId));
     }
 
     // ------------------------------------------------------------------ reporting data
@@ -168,14 +124,8 @@ public class PatientAccessAdminController {
 
         log.info("Fetching TIN data for tinId: {} from {} to {}", tinId, reportingPeriodStart, reportingPeriodEnd);
 
-        try {
-            ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-            return ResponseEntity.ok(
-                    patientAccessDataService.getTinData(tinId, period.start(), period.end()));
-        } catch (Exception e) {
-            log.error("Error fetching TIN data for tinId: {}", tinId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
+        return ResponseEntity.ok(patientAccessDataService.getTinData(tinId, period.start(), period.end()));
     }
 
     /** Measure totals for one provider within one TIN. */
@@ -189,14 +139,9 @@ public class PatientAccessAdminController {
         log.info("Fetching TIN-Provider data for tinId: {}, providerId: {} from {} to {}",
                 tinId, providerId, reportingPeriodStart, reportingPeriodEnd);
 
-        try {
-            ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-            return ResponseEntity.ok(
-                    patientAccessDataService.getTinProviderData(tinId, providerId, period.start(), period.end()));
-        } catch (Exception e) {
-            log.error("Error fetching TIN-Provider metrics for tinId: {}, providerId: {}", tinId, providerId, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
+        return ResponseEntity.ok(
+                patientAccessDataService.getTinProviderData(tinId, providerId, period.start(), period.end()));
     }
 
     /** Every patient row in a reporting period. */
@@ -207,14 +152,8 @@ public class PatientAccessAdminController {
 
         log.info("Fetching all patient metrics from {} to {}", reportingPeriodStart, reportingPeriodEnd);
 
-        try {
-            ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-            return ResponseEntity.ok(
-                    patientAccessDataService.getAllPatientData(period.start(), period.end()));
-        } catch (Exception e) {
-            log.error("Error fetching all patient metrics", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
+        return ResponseEntity.ok(patientAccessDataService.getAllPatientData(period.start(), period.end()));
     }
 
     // ------------------------------------------------------------------ dashboards
@@ -231,14 +170,9 @@ public class PatientAccessAdminController {
         log.info("Fetching dashboard with patients who have access for orgId: {}, providerId: {}, tinId: {}",
                 organisationId, providerId, tinId);
 
-        try {
-            ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-            return ResponseEntity.ok(patientAccessAdminService
-                    .getProviderDashboard(organisationId, providerId, tinId, period));
-        } catch (Exception e) {
-            log.error("Error fetching dashboard with patients who have access", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
+        return ResponseEntity.ok(
+                patientAccessAdminService.getProviderDashboard(organisationId, providerId, tinId, period));
     }
 
     /** Performance across every provider billing under one TIN. */
@@ -250,21 +184,19 @@ public class PatientAccessAdminController {
 
         log.info("Fetching group dashboard with patients who have access for group: {}", tinId);
 
-        try {
-            ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
-            return ResponseEntity.ok(patientAccessAdminService.getGroupDashboard(tinId, period));
-        } catch (Exception e) {
-            log.error("Error fetching group dashboard with patients who have access", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        ReportingPeriod period = ReportingPeriod.of(reportingPeriodStart, reportingPeriodEnd);
+        return ResponseEntity.ok(patientAccessAdminService.getGroupDashboard(tinId, period));
     }
 
     // ------------------------------------------------------------------ helpers
 
-    private AccessRequestResponse errorResponse(String message) {
-        AccessRequestResponse response = new AccessRequestResponse();
-        response.setSuccess(false);
-        response.setMessage(message);
-        return response;
+    /**
+     * A refused decision is a client problem, so it answers 400; an accepted one answers 200.
+     * Unexpected failures never reach here - they go to the exception handler instead.
+     */
+    private ResponseEntity<AccessRequestResponse> toResponse(AccessRequestResponse response) {
+        return response.isSuccess()
+                ? ResponseEntity.ok(response)
+                : ResponseEntity.badRequest().body(response);
     }
 }

@@ -4,6 +4,8 @@ import com.onc.G2.dto.AccessRequestResult;
 import com.onc.G2.dto.PatientAccessRequestDto;
 import com.onc.G2.dto.PatientAttribution;
 import com.onc.G2.enums.RequestType;
+import com.onc.G2.exception.AccessOperationException;
+import com.onc.G2.exception.PatientDataAccessException;
 import com.onc.G2.model.ReportingPeriod;
 import com.onc.G2.service.PatientAccessDataService;
 import com.onc.G2.service.PatientAccessRequestService;
@@ -35,21 +37,27 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
 
     @Override
     public boolean checkAccessAndRecordView(String patientFhirId) {
-        boolean hasActiveAccess = patientAccessRequestService
-                .hasActiveAccess(patientFhirId, RequestType.MEDICAL_DETAILS_ACCESS);
+        try {
+            boolean hasActiveAccess = patientAccessRequestService
+                    .hasActiveAccess(patientFhirId, RequestType.MEDICAL_DETAILS_ACCESS);
 
-        if (!hasActiveAccess) {
-            log.info("Patient: {} does not have active access. Returning access message.", patientFhirId);
-            return false;
+            if (!hasActiveAccess) {
+                log.info("Patient: {} does not have active access. Returning access message.", patientFhirId);
+                return false;
+            }
+
+            log.info("Patient: {} has active access, fetching medical details", patientFhirId);
+
+            ReportingPeriod period = ReportingPeriod.currentCalendarYear();
+            patientAccessDataService.updateNumerator(
+                    patientFhirId, period.start(), period.end(), true, Instant.now());
+
+            return true;
+
+        } catch (Exception e) {
+            throw new PatientDataAccessException(
+                    "Failed to check access for patient " + patientFhirId, e);
         }
-
-        log.info("Patient: {} has active access, fetching medical details", patientFhirId);
-
-        ReportingPeriod period = ReportingPeriod.currentCalendarYear();
-        patientAccessDataService.updateNumerator(
-                patientFhirId, period.start(), period.end(), true, Instant.now());
-
-        return true;
     }
 
     @Override
@@ -60,6 +68,23 @@ public class PatientAccessWorkflowServiceImpl implements PatientAccessWorkflowSe
                                              String tinId,
                                              String reportingPeriodStart,
                                              String reportingPeriodEnd) {
+        try {
+            return createRequest(patientFhirId, requestType, encounterId, providerId, tinId,
+                    reportingPeriodStart, reportingPeriodEnd);
+        } catch (Exception e) {
+            // Carries the operation name so the caller sees the same message as before. Covers
+            // an unknown request type and an unparseable date as well as downstream failures.
+            throw new AccessOperationException("Error creating access request: " + e.getMessage(), e);
+        }
+    }
+
+    private AccessRequestResult createRequest(String patientFhirId,
+                                              String requestType,
+                                              String encounterId,
+                                              String providerId,
+                                              String tinId,
+                                              String reportingPeriodStart,
+                                              String reportingPeriodEnd) {
 
         RequestType type = RequestType.valueOf(requestType.toUpperCase());
         ReportingPeriod period = ReportingPeriod.parse(reportingPeriodStart, reportingPeriodEnd);

@@ -4,6 +4,7 @@ import com.onc.G2.dto.AccessDashboardResponse;
 import com.onc.G2.dto.AccessRequestResponse;
 import com.onc.G2.dto.PatientAccessDataDto;
 import com.onc.G2.dto.PatientAccessRequestDto;
+import com.onc.G2.exception.AccessOperationException;
 import com.onc.G2.model.ReportingPeriod;
 import com.onc.G2.service.PatientAccessAdminService;
 import com.onc.G2.service.PatientAccessDataService;
@@ -39,7 +40,15 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
     @Transactional
     public AccessRequestResponse grantAccess(Long requestId) {
         log.info("Granting access for request: {} ", requestId);
+        try {
+            return doGrantAccess(requestId);
+        } catch (Exception e) {
+            throw new AccessOperationException("Error granting access: " + e.getMessage(), e);
+        }
+    }
 
+    /** The actual approval steps; failures are given operation context by the caller. */
+    private AccessRequestResponse doGrantAccess(Long requestId) {
         AccessRequestResponse response = patientAccessRequestService.grantAccess(requestId);
         if (!response.isSuccess()) {
             return response;
@@ -90,7 +99,15 @@ public class PatientAccessAdminServiceImpl implements PatientAccessAdminService 
     @Transactional
     public AccessRequestResponse revokeAccess(Long requestId) {
         log.info("Revoking access for request: {}", requestId);
+        try {
+            return doRevokeAccess(requestId);
+        } catch (Exception e) {
+            throw new AccessOperationException("Error revoking access: " + e.getMessage(), e);
+        }
+    }
 
+    /** The actual withdrawal steps; failures are given operation context by the caller. */
+    private AccessRequestResponse doRevokeAccess(Long requestId) {
         AccessRequestResponse response = patientAccessRequestService.revokeAccess(requestId);
         if (!response.isSuccess()) {
             return response;
