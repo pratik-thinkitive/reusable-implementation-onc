@@ -1,36 +1,34 @@
 package com.onc.C2.controller;
 
-import com.onc.C2.dto.PatientData;
-import com.onc.C2.service.QRDAExtractionService;
-import com.onc.api.support.ApiResponse;
-import com.onc.api.support.BaseController;
-import com.onc.api.support.ResponseCode;
+import com.onc.C2.service.QRDAAggregationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.util.List;
 
-//takes all the files as input and return the QRDA-III file in response which contains the summary of the patient records
-@RestController
-@RequestMapping("/ehr/c2")
-@RequiredArgsConstructor
 @Slf4j
-public class QRDAIIIController extends BaseController {
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/ehr/c2")
+public class QRDAIIIController {
 
-    private final QRDAExtractionService qrdaExtractionService;
+    private final QRDAAggregationService qrdaAggregationService;
 
-    @PostMapping(value = "/import", consumes = {MediaType.APPLICATION_XML_VALUE, MediaType.TEXT_XML_VALUE, MediaType.TEXT_PLAIN_VALUE})
-    public ResponseEntity<ApiResponse<PatientData>> importQrda(@RequestBody String qrdaXml) {
-        log.info("Importing a QRDA document of {} characters", qrdaXml.length());
-        InputStream xmlStream = new ByteArrayInputStream(qrdaXml.getBytes(StandardCharsets.UTF_8));
-        return data(ResponseCode.OK, "QRDA Document Imported", qrdaExtractionService.extractPatientData(xmlStream));
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> importC2Patients(@RequestParam("file") MultipartFile zipFile) {
+        return qrdaAggregationService.importC2Patients(zipFile);
+    }
+
+    @PostMapping(value = "/summary", produces = "application/zip")
+    public ResponseEntity<?> generateC2Summary(@RequestBody List<String> patientIds,
+                                               @RequestParam("measurementPeriodStart") String measurementPeriodStart,
+                                               @RequestParam("measurementPeriodEnd") String measurementPeriodEnd) {
+        return qrdaAggregationService.generateQrdaIIISummary(patientIds, measurementPeriodStart, measurementPeriodEnd);
     }
 }
+
+

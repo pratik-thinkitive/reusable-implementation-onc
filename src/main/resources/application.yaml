@@ -23,6 +23,9 @@ fhir:
 ehr:
   api:
     base-url: ${EHR_API_BASE_URL:https://provider.staging.ehr/apis/v1}
+  # The patient-case API sits under a different path than the rest of the provider API.
+  soap-enrichment:
+    base-url: ${EHR_SOAP_ENRICHMENT_BASE_URL:https://provider.staging.ehr/apis/soap-enrichment/v1}
   # Organisation whose clinics are enumerated when listing providers. Was a literal in the
   # G2 code; set this per deployment.
   organisation-id: ${EHR_ORGANISATION_ID:0}

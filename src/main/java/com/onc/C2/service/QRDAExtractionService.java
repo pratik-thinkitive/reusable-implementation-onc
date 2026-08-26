@@ -1,14 +1,38 @@
 package com.onc.C2.service;
 
-import com.onc.C2.dto.PatientData;
+import com.onc.EHR.dto.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.InputStream;
+import java.util.List;
 
-// Extracts patient data from a QRDA Category I document for Category III aggregation.
-// Throws exception when the document cannot be processed.
 public interface QRDAExtractionService {
 
-    PatientData extractPatientData(InputStream xmlInput);
+    ExtractedQrdaData extractPatientData(InputStream xmlInput) throws Exception;
 
-    String formatDate(String value);
+    ExtractedProviderDetails extractProviderDetails(InputStream xmlInput) throws Exception;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class ExtractedQrdaData {
+        private PersonalDetailsData personalDetailsData;
+        private List<InsuranceDetails> insuranceDetails;
+        private AppointmentData appointmentData;
+        private String clinicId;
+        private String measureId;
+        private String measureName;
+        private FormResponse formResponse; // Contains Assessment and Intervention sections with CodeSection
+        private DoctorDetailsData providerDetails;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    class ExtractedProviderDetails {
+        private DoctorDetailsData providerDetails;
+    }
 }
+
