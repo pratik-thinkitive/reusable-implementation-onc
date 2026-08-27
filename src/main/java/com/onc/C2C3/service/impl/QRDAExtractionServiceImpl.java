@@ -1,7 +1,7 @@
-package com.onc.C2.service.impl;
+package com.onc.C2C3.service.impl;
 
 import com.onc.EHR.dto.*;
-import com.onc.C2.service.QRDAExtractionService;
+import com.onc.C2C3.service.QRDAExtractionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;

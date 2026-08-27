@@ -1,4 +1,4 @@
-package com.onc.C2.dto;
+package com.onc.C2C3.dto;
 
 import com.onc.EHR.dto.*;
 import lombok.AllArgsConstructor;

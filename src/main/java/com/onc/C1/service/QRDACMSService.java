@@ -1,4 +1,4 @@
-package com.onc.QRDA.service;
+package com.onc.C1.service;
 
 import com.onc.EHR.dto.*;
 import org.springframework.http.ResponseEntity;

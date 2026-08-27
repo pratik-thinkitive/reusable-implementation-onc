@@ -1,7 +1,7 @@
-package com.onc.QRDA.controller;
+package com.onc.C1.controller;
 
 import com.onc.EHR.dto.*;
-import com.onc.QRDA.service.QRDACMSService;
+import com.onc.C1.service.QRDACMSService;
 import com.onc.api.support.ApiResponse;
 import com.onc.api.support.BaseController;
 import lombok.RequiredArgsConstructor;

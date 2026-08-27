@@ -1,12 +1,12 @@
-package com.onc.C2.service.impl;
+package com.onc.C2C3.service.impl;
 
-import com.onc.C2.dto.PatientMeasureData;
+import com.onc.C2C3.dto.PatientMeasureData;
 import com.onc.EHR.service.EHRTokenService;
 import com.onc.EHR.dto.*;
-import com.onc.C2.service.QRDAAggregationService;
-import com.onc.C2.service.QRDAExtractionService;
-import com.onc.C2.measure.MeasureEvaluator;
-import com.onc.C2.service.PatientSummaryService;
+import com.onc.C2C3.service.QRDAAggregationService;
+import com.onc.C2C3.service.QRDAExtractionService;
+import com.onc.C2C3.measure.MeasureEvaluator;
+import com.onc.C2C3.service.PatientSummaryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

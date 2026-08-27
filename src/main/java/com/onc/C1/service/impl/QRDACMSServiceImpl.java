@@ -1,9 +1,9 @@
-package com.onc.QRDA.service.impl;
+package com.onc.C1.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.onc.EHR.dto.*;
 import com.onc.EHR.service.EHRDataService;
-import com.onc.QRDA.service.QRDACMSService;
+import com.onc.C1.service.QRDACMSService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.openhealthtools.mdht.uml.cda.*;

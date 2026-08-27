@@ -1,6 +1,6 @@
-package com.onc.C2.controller;
+package com.onc.C2C3.controller;
 
-import com.onc.C2.service.QRDAAggregationService;
+import com.onc.C2C3.service.QRDAAggregationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;

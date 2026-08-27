@@ -1,6 +1,6 @@
-package com.onc.C2.measure;
+package com.onc.C2C3.measure;
 
-import com.onc.C2.dto.PatientMeasureData;
+import com.onc.C2C3.dto.PatientMeasureData;
 import com.onc.EHR.dto.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
