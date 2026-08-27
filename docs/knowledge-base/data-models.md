@@ -72,8 +72,22 @@ Removed: `AccessRequestResponse` (its `success`/`message`/`requestId`/`status` a
 
 ---
 
+## C2C3 — Measure Model
+[C2C3/dto/PatientMeasureData.java](src/main/java/com/onc/C2C3/dto/PatientMeasureData.java) is the only DTO C2C3 defines; everything else reuses `EHR/dto`. When the module was merged, 60 of its 66 DTOs were dropped as duplicates after a field-by-field comparison — 51 were identical, `Clinic` and `AssociatedField` were supersets on our side, and the two carrying `emmacare_case_id` were only ever read from raw maps.
+
+| Field group | Contents |
+|---|---|
+| Identity | `patientId`, `clinicId`, `measureId`, `measureName` |
+| Source data | `personalDetailsData`, `insuranceDetails`, `appointmentData`, `formResponses` |
+| Derived | `encounters` (`EncounterData`, from appointments via `MeasureEvaluator.extractEncounters`) |
+| Measure results | `inInitialPopulation`, `eligibleEncounter`, `c2Denominator`, `c2Numerator`, `denominatorExcluded`, `receivedRequiredIntervention` |
+
+`PatientInformation.race` / `.ethnicity` are `List<String>` on the shared DTO; C2C3 wraps a parsed scalar with `List.of(...)` on the way in and takes the first populated value on the way out, matching what C1 does.
+
+Three DTOs moved into `EHR/dto` with the merge because they describe EHR write operations rather than C2C3 concepts: `ProviderCreationRequest`, `ProviderCreationResponse`, `ProviderUpdateRequest`.
+
 ## EHR — Transport DTOs
-[EHR/dto/](src/main/java/com/onc/EHR/dto/) — 62 classes, plain Lombok `@Data` POJOs. Not persisted.
+[EHR/dto/](src/main/java/com/onc/EHR/dto/) — 65 classes, plain Lombok `@Data` POJOs. Not persisted.
 
 ### Envelope Pattern
 Provider responses wrap payloads uniformly: `{ code: int, data: <T>, message: String }`.

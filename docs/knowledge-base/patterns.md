@@ -20,11 +20,18 @@ Responses are fetched as `String` and deserialized with the injected `ObjectMapp
 A read that finds nothing returns an empty list, or throws `NOT_FOUND` where a single resource was addressed. The 204s the previous signature produced could not survive an envelope that always carries a body.
 
 ## Error Handling
-One convention across all three modules: **throw, never convert**.
+One convention across EHR, C1 and G2: **throw, never convert**. C2C3 is the exception and predates it — see below.
 - Business rejections throw `AppException` carrying a `ResponseCode` and a message written to be shown to the caller — no stack traces, SQL, exception class names, or upstream hostnames.
 - [GlobalExceptionHandler](src/main/java/com/onc/api/GlobalExceptionHandler.java) is the only place that turns a failure into a response. It extends `ResponseEntityExceptionHandler` and overrides `handleExceptionInternal`, without which the base class's `ProblemDetail` bodies would ship a different shape for unknown routes, wrong methods, and unreadable bodies.
 - `onc.expose-error-details` (default `false`) gates whether a 500 names its cause. The default is asserted in a test so it stays a real guarantee.
 - The remaining `try/catch` blocks exist to *degrade*, not to convert, and each says why: `PatientAttributionServiceImpl` (an access request must be fileable when the directory is down), `QRDACMSServiceImpl` (a missing section is omitted rather than failing the document — which is why the result can be clinically incomplete without signalling it), and `EHRDataServiceImpl`'s per-item fan-outs (one bad form or clinic must not empty the whole read).
+
+## C2C3 Conventions (off-pattern)
+The module arrived working and certified, and was aligned on packaging and naming but not on response handling:
+- Controllers return raw `ResponseEntity<?>`, not `ApiResponse`. Services catch and build responses themselves, including `Map.of("error", ..., "message", e.getMessage())` — the exception echo the rest of the codebase removed.
+- `MeasureEvaluator` is a static utility rather than an injected service; `PatientSummaryService` is `@Component`, not an interface + impl pair.
+- Upstream wire values keep the previous vendor's names (`emmacare_case_id`, `EMMACARE_CASE_` / `EMMACARE_FORM_` id prefixes) because changing them changes what is sent and stored. Hostnames and identifiers were made vendor-neutral; these were not.
+- Reads share one auth token per patient and the import ZIP is decompressed once, but the summary path is still serial per patient.
 
 ## Transaction Boundaries
 - `PatientAccessRequestServiceImpl` and `PatientAccessDataServiceImpl` are class-level `@Transactional`.
@@ -61,4 +68,4 @@ Code-system dispatch by literal string equality on prefixed codes (`"SCT-3248500
 - **G2 measure**: denominator = patient had an in-period encounter (set on request or grant); numerator = access granted and the patient viewed their data. Both are 0-or-1 per patient per period; `isNumeratorRecorded` stays true after revocation so revoked patients still appear on dashboards.
 
 ## Testing
-MockMvc slice tests over the G2 controllers with mocked services — 5 classes, 41 tests, all passing. `@DisplayName` describes behaviour in prose. [EnvelopeContractTest](src/test/java/com/onc/G2/controller/EnvelopeContractTest.java) pins the envelope itself rather than any one endpoint: the `ProblemDetail` guard, the validation messages, and that a 500 never echoes its cause. No tests for the EHR or QRDA modules: CDA generation, terminology mapping, date conversion, and `isInInitialPopulation` are uncovered.
+MockMvc slice tests over the G2 controllers with mocked services — 5 classes, 41 tests, all passing. `@DisplayName` describes behaviour in prose. [EnvelopeContractTest](src/test/java/com/onc/G2/controller/EnvelopeContractTest.java) pins the envelope itself rather than any one endpoint: the `ProblemDetail` guard, the validation messages, and that a 500 never echoes its cause. No tests for EHR, C1 or C2C3: CDA generation, terminology mapping, date conversion, `isInInitialPopulation`, the Cat I parser and the Cat III summary are all uncovered.

@@ -1,9 +1,9 @@
 # API Reference
 
-Three controllers, no authentication on any of them.
+Five controllers, 33 endpoints, no authentication on any of them.
 
 ## Response Envelope
-Every endpoint except the two binary QRDA ones returns [ApiResponse](src/main/java/com/onc/api/support/ApiResponse.java), success or failure:
+Every endpoint except the three binary ones (C1 `/file`, C1 `/zip`, C2C3 `/summary`) and the two C2C3 endpoints returns [ApiResponse](src/main/java/com/onc/api/support/ApiResponse.java), success or failure:
 
 ```json
 { "success": true, "code": "ENTITY", "message": null, "data": { }, "path": "/ehr/data/personal-details",
@@ -45,8 +45,8 @@ Every endpoint except the two binary QRDA ones returns [ApiResponse](src/main/ja
 | GET | `/clinics` | `organisationId` (int) | `List<Clinic>` | **none** |
 | GET | `/providers` | `clinicId` | `List<DoctorDetailsData>` | **none** |
 
-## QRDA — `/ehr/cms/qrda`
-[QRDACMSController.java](src/main/java/com/onc/QRDA/controller/QRDACMSController.java) → `QRDACMSServiceImpl`. The six data endpoints are pass-throughs to `EHRDataService`; only `/file` and `/zip` do QRDA work.
+## C1 — `/ehr/cms/qrda`
+[QRDACMSController.java](src/main/java/com/onc/C1/controller/QRDACMSController.java) → `QRDACMSServiceImpl`. The six data endpoints are pass-throughs to `EHRDataService`; only `/file` and `/zip` do QRDA work.
 
 | Method | Path | Params | Returns | Auth |
 |---|---|---|---|---|
@@ -57,6 +57,16 @@ Every endpoint except the two binary QRDA ones returns [ApiResponse](src/main/ja
 | POST | `/zip` | body: `List<String>` fhirIds | ZIP `CMS139.zip` | **none** |
 
 **Note:** `fhirId` on `/soap-details` and `clinicId` on `/appointment-details` still lack `@RequestParam` — Spring treats unannotated `String` args as model attributes, so they bind to `null`/empty. The `/ehr/data` equivalents are annotated correctly.
+
+## C2C3 — `/ehr/c2`
+[QRDAIIIController.java](src/main/java/com/onc/C2C3/controller/QRDAIIIController.java) → `QRDAAggregationService`
+
+| Method | Path | Consumes / Params | Returns | Auth |
+|---|---|---|---|---|
+| POST | `/import` | `multipart/form-data`, part `file` — a ZIP of QRDA Cat I documents | raw `Map` — per-file upload status, merge provenance | **none** |
+| POST | `/summary` | body `List<String>` patientIds; `measurementPeriodStart`, `measurementPeriodEnd` (`yyyy-MM-dd`) | `application/zip` containing the QRDA Cat III document | **none** |
+
+**These two do not use the envelope.** `/summary` cannot — it returns a ZIP, like C1's binary endpoints. `/import` returns a bare `Map`, and on failure returns `Map.of("error", ..., "message", e.getMessage())`, which echoes the exception to the caller. C2C3 is the only module that still does this; every other module routes failures through `GlobalExceptionHandler`.
 
 ## G2 patient endpoints — `/ehr/g2`
 [G2Controller.java](src/main/java/com/onc/G2/controller/G2Controller.java) → `PatientAccessWorkflowService`
@@ -87,7 +97,7 @@ Every endpoint except the two binary QRDA ones returns [ApiResponse](src/main/ja
 All listing and dashboard endpoints are **unpaginated**.
 
 ## Error Contract
-[GlobalExceptionHandler.java](src/main/java/com/onc/api/GlobalExceptionHandler.java) — one unscoped `@ControllerAdvice` extending `ResponseEntityExceptionHandler`, covering all three modules.
+[GlobalExceptionHandler.java](src/main/java/com/onc/api/GlobalExceptionHandler.java) — one unscoped `@ControllerAdvice` extending `ResponseEntityExceptionHandler`. It covers every module, though C2C3 catches its own failures before they reach it.
 
 | Exception | Status | Message |
 |---|---|---|
@@ -134,6 +144,7 @@ Auth: OAuth2 password grant via `EHRTokenServiceImpl.getAccessToken()` on the sh
 | `ehr.provider-page-size` | `EHR_PROVIDER_PAGE_SIZE` | `50` |
 | `spring.datasource.url` / `.username` / `.password` | `DB_URL` / `DB_USER` / `DB_PASSWORD` | `jdbc:postgresql://localhost:5432/onc`, `postgres`/`postgres` |
 | `qrda.vendor.*`, `qrda.custodian.*`, `qrda.legal-authenticator.*` | `QRDA_*` | placeholder identity written into the QRDA header |
+| `ehr.soap-enrichment.base-url` | `EHR_SOAP_ENRICHMENT_BASE_URL` | `https://provider.staging.ehr/apis/soap-enrichment/v1` — **placeholder**; the patient-case API used by C2C3 sits under a different path |
 | `onc.expose-error-details` | `ONC_EXPOSE_ERROR_DETAILS` | `false` — **never true in a deployed environment**; it echoes the exception class and message on a 500 |
 
 `.ehr` is not a delegated TLD, so the placeholder hosts do not resolve — a deployment that forgets the env vars fails on connection rather than silently reaching a live host.

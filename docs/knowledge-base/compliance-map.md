@@ -9,7 +9,7 @@
 | 2 | ~~Critical~~ **FIXED** | [ConfigurationService.java](src/main/java/com/onc/config/ConfigurationService.java) | `RestTemplate` and `ObjectMapper` were injected with no bean defining them. | **Resolved** — both are now `@Bean`s. Timeouts are still missing (#12). |
 | 3 | **Critical** | [application.yaml](src/main/resources/application.yaml) | **No schema management.** Two JPA entities exist, but there is no Flyway/Liquibase, no `spring.jpa.hibernate.ddl-auto`, and no DDL in the repo. `patient_access_request` and `patient_access_data` must be created by hand, and no migration path exists for the enum-name coupling in #16. | Add Flyway with a baseline migration for both tables |
 | 4 | High | [application.yaml](src/main/resources/application.yaml) | `EHR_CLIENT_AUTH` / `EHR_USERNAME` / `EHR_PASSWORD` default to empty and `EHR_API_BASE_URL` / `EHR_TOKEN_URL` to non-resolving placeholders — the app starts and fails only on first upstream call. `DB_USER`/`DB_PASSWORD` default to `postgres`/`postgres`. | Fail fast on startup when required values are unset; no credential defaults |
-| 5 | Low | [pom.xml](pom.xml) · [application.yaml](src/main/resources/application.yaml) | `artifactId` and `spring.application.name` are still `qrdaC1`, though the service now carries three modules. | Rename to match the repo |
+| 5 | Low | [pom.xml](pom.xml) · [application.yaml](src/main/resources/application.yaml) | `artifactId` and `spring.application.name` are still `qrdaC1`, though the service now carries four modules. | Rename to match the repo |
 
 ## Access Control & PHI Exposure
 | # | Severity | Location | Issue | Fix |
@@ -56,8 +56,21 @@
 | 37 | ~~Low~~ **FIXED** | `QRDACMSController` | `public final QRDACMSService` — public-visibility field. | **Resolved 2026-08-25** — now `private final`. |
 | 38 | Low | `MedicalDetails` `@JsonProperty` keys | Upstream typos and stray whitespace (`"Clinican Test…"`, `"Heath Concern"`, `"Diagnostic Imaging Report "`) — silent mismatch if upstream corrects them. | Pin with tests |
 
+## C2C3 Findings
+| # | Severity | Location | Issue | Fix |
+|---|---|---|---|---|
+| 39 | **Critical** | `QRDAIIIController` | `POST /import` accepts an unauthenticated multipart upload of QRDA documents and writes the patients into the EHR — patient creation, coverage, appointments and clinical forms, from any caller who can reach the port. | Authenticate before anything else in this module |
+| 40 | High | `QRDAAggregationServiceImpl.importC2Patients` | On failure returns `Map.of("error", ..., "message", e.getMessage())`, echoing the exception to the caller. This is finding #11 again, in the one module that did not move onto the envelope. | Route through `GlobalExceptionHandler` |
+| 41 | High | `PatientSummaryService:67-68` | Measure identity is hardcoded — `5cd5918e-…` / "Falls: Screening for Future Fall Risk" — while the reference Cat III document that passed the live test carries HQMF `8A6D0454-…-2EAC82341B5C` for a dementia cognition measure. The emitted document may not describe the measure it reports. | Make the measure configuration, not a literal |
+| 42 | High | whole module | **No tests.** Neither endpoint, the parser, the duplicate merge, nor the measure evaluation is covered. Any change rests on reasoning alone. | Characterization test: known ZIP in, emitted XML snapshotted |
+| 43 | Medium | `QRDAAggregationServiceImpl` | Wire values still carry the previous vendor's name (`emmacare_case_id`, `EMMACARE_CASE_` / `EMMACARE_FORM_` prefixes), so the module only talks to an Emmacare-flavoured EHR while the rest of the service is vendor-neutral. | Decide whether the key is contractual; if not, rename with the upstream |
+| 44 | Medium | `PatientSummaryService.fetchPatients` | Summary generation is serial per patient — roughly 4 + N calls each, nothing batched or parallel. | Bounded parallelism, or batch endpoints if the provider has them |
+| 45 | Medium | `QRDAAggregationServiceImpl.detectAndMergeDuplicates` | O(n²) pairwise fuzzy matching. `generatePatientKey` computes an exact key that is then used only as a map key, never to match — the cheap blocking pass is already written and unused. | Block on the key, fuzzy-match within buckets |
+| 46 | Medium | `QRDAExtractionServiceImpl` | 16 full-document `getElementsByTagName` traversals per file — `observation` three times, `encounter`, `author` and `organizer` twice each. | Resolve each once per document |
+| 47 | Low | generated ids | `EMMACARE_CASE_` / `EMMACARE_FORM_` ids use `UUID.randomUUID()` and `System.currentTimeMillis()`, so a re-import of the same ZIP produces different ids. | Derive from stable inputs if de-duplication upstream matters |
+
 ## Test Coverage
-41 tests, all passing — but **entirely G2 controller slices with mocked services**. Uncovered: every EHR and QRDA class, all JPA repository queries (including the inconsistent predicates in #15/#18), the transaction boundaries in #20, CDA generation, `isInInitialPopulation`, terminology mapping, date conversion, and the regex XML patch. For a CMS submission artifact, generated documents should be validated against the CMS QRDA Cat I schematron in CI.
+41 tests, all passing — but **entirely G2 controller slices with mocked services**. C1 and C2C3 have none at all. Uncovered: every EHR and QRDA class, all JPA repository queries (including the inconsistent predicates in #15/#18), the transaction boundaries in #20, CDA generation, `isInInitialPopulation`, terminology mapping, date conversion, and the regex XML patch. For a CMS submission artifact, generated documents should be validated against the CMS QRDA Cat I schematron in CI.
 
 The response envelope and error contract are covered by `EnvelopeContractTest` and `VerboseErrorDetailsTest`, including the `ProblemDetail` guard and the assertion that a 500 never echoes its cause.
 
