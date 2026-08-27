@@ -3,7 +3,7 @@
 Five controllers, 33 endpoints, no authentication on any of them.
 
 ## Response Envelope
-Every endpoint except the three binary ones (C1 `/file`, C1 `/zip`, C2C3 `/summary`) and the two C2C3 endpoints returns [ApiResponse](src/main/java/com/onc/api/support/ApiResponse.java), success or failure:
+Every endpoint returns this on failure. On success, all but the three binary ones (C1 `/file`, C1 `/zip`, C2C3 `/summary`) and C2C3 `/import` return [ApiResponse](src/main/java/com/onc/api/support/ApiResponse.java), success or failure:
 
 ```json
 { "success": true, "code": "ENTITY", "message": null, "data": { }, "path": "/ehr/data/personal-details",
@@ -66,7 +66,9 @@ Every endpoint except the three binary ones (C1 `/file`, C1 `/zip`, C2C3 `/summa
 | POST | `/import` | `multipart/form-data`, part `file` — a ZIP of QRDA Cat I documents | raw `Map` — per-file upload status, merge provenance | **none** |
 | POST | `/summary` | body `List<String>` patientIds; `measurementPeriodStart`, `measurementPeriodEnd` (`yyyy-MM-dd`) | `application/zip` containing the QRDA Cat III document | **none** |
 
-**These two do not use the envelope.** `/summary` cannot — it returns a ZIP, like C1's binary endpoints. `/import` returns a bare `Map`, and on failure returns `Map.of("error", ..., "message", e.getMessage())`, which echoes the exception to the caller. C2C3 is the only module that still does this; every other module routes failures through `GlobalExceptionHandler`.
+**Success bodies here are outside the envelope; failures are not.** `/summary` returns a ZIP, like C1's binary endpoints, and `/import` returns a bare `Map`. Both were left that way deliberately — this module produces the artifact that passed certification, so its success contracts are unchanged. Failures go through `GlobalExceptionHandler` like every other module.
+
+Note `/summary` declares no `produces`. It once declared `application/zip`, which restricted the response and would have turned a JSON error body into a 406; the content type is set on the `ResponseEntity` instead.
 
 ## G2 patient endpoints — `/ehr/g2`
 [G2Controller.java](src/main/java/com/onc/G2/controller/G2Controller.java) → `PatientAccessWorkflowService`
@@ -97,7 +99,7 @@ Every endpoint except the three binary ones (C1 `/file`, C1 `/zip`, C2C3 `/summa
 All listing and dashboard endpoints are **unpaginated**.
 
 ## Error Contract
-[GlobalExceptionHandler.java](src/main/java/com/onc/api/GlobalExceptionHandler.java) — one unscoped `@ControllerAdvice` extending `ResponseEntityExceptionHandler`. It covers every module, though C2C3 catches its own failures before they reach it.
+[GlobalExceptionHandler.java](src/main/java/com/onc/api/GlobalExceptionHandler.java) — one unscoped `@ControllerAdvice` extending `ResponseEntityExceptionHandler`. It covers every module.
 
 | Exception | Status | Message |
 |---|---|---|

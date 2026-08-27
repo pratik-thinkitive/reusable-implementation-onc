@@ -17,7 +17,7 @@ Spring Boot REST service implementing three ONC/CMS reporting concerns over a sh
 | Persistence | `spring-boot-starter-data-jpa` + PostgreSQL | **in use** — 2 entities, 2 repositories (G2 only) |
 | Boilerplate | Lombok (`@Data`, `@Builder`, `@RequiredArgsConstructor`, `@Slf4j`) | — |
 | Validation | `spring-boot-starter-validation` | declared, **no constraints used** |
-| Test | `*-test` starters, JUnit 5, MockMvc | 5 classes / 41 tests, all passing |
+| Test | `*-test` starters, JUnit 5, MockMvc | 6 classes / 50 tests, all passing |
 
 ## Architecture
 ```
@@ -46,11 +46,11 @@ HTTP /ehr/admin/…   │ G2Controller / PatientAccessAdminController   │
                     │   → PatientAttributionService  ────┘          │
                     └──────────────────────────────────────────────┘
 
-EHR, C1 and G2 controllers extend BaseController and answer with the ApiResponse
-envelope, throwing AppException for one GlobalExceptionHandler to shape. Three
-endpoints are outside it: C1's /file and /zip and C2C3's /summary return XML and
-ZIPs, so only their failures are enveloped. C2C3 has not been migrated onto the
-envelope at all — see patterns.md.
+Every module throws AppException for one GlobalExceptionHandler to shape, so all
+failures share the ApiResponse envelope. EHR, C1 and G2 controllers extend
+BaseController and envelope their success bodies too. Four endpoints keep raw
+success responses: C1's /file and /zip and C2C3's /summary return XML and ZIPs,
+and C2C3's /import returns a map — see patterns.md.
 ```
 
 ## Module Map
@@ -104,11 +104,11 @@ envelope at all — see patterns.md.
 ## Build & Run
 ```bash
 ./mvnw spring-boot:run     # needs EHR_* env vars + a reachable PostgreSQL (see compliance-map.md)
-./mvnw test                # 41 tests
+./mvnw test                # 50 tests
 ```
 
 ## Known Blockers (detail in [compliance-map.md](compliance-map.md))
 - **No schema management** — JPA entities exist but there is no Flyway/Liquibase and no `ddl-auto`; the two tables must be created by hand.
 - **No authentication anywhere** — including the admin grant/revoke endpoints.
 - **Missing config** — `EHR_API_BASE_URL`, `EHR_TOKEN_URL`, `EHR_CLIENT_AUTH`, `EHR_USERNAME`, `EHR_PASSWORD` have placeholder/empty defaults.
-- **C2C3 is untested and off-convention** — no test covers either endpoint, responses bypass the envelope, and the measure identity is hardcoded.
+- **C2C3's internals are untested** — its controller contract is covered, but the parser, duplicate merge, measure evaluation and Cat III generation are not, and the measure identity is hardcoded.
