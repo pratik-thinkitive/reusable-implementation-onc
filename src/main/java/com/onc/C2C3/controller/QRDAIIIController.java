@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -19,14 +20,14 @@ public class QRDAIIIController {
     private final QRDAAggregationService qrdaAggregationService;
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> importC2Patients(@RequestParam("file") MultipartFile zipFile) {
+    public ResponseEntity<Map<String, Object>> importC2Patients(@RequestParam("file") MultipartFile zipFile) {
         return qrdaAggregationService.importC2Patients(zipFile);
     }
 
     @PostMapping("/summary")
-    public ResponseEntity<?> generateC2Summary(@RequestBody List<String> patientIds,
-                                               @RequestParam("measurementPeriodStart") String measurementPeriodStart,
-                                               @RequestParam("measurementPeriodEnd") String measurementPeriodEnd) {
+    public ResponseEntity<byte[]> generateC2Summary(@RequestBody List<String> patientIds,
+                                                    @RequestParam("measurementPeriodStart") String measurementPeriodStart,
+                                                    @RequestParam("measurementPeriodEnd") String measurementPeriodEnd) {
         return qrdaAggregationService.generateQrdaIIISummary(patientIds, measurementPeriodStart, measurementPeriodEnd);
     }
 }

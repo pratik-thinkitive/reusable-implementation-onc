@@ -21,7 +21,6 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,11 +57,10 @@ class QRDAIIIControllerTest {
         @DisplayName("/summary still returns the ZIP bytes, unenveloped")
         void summaryReturnsZip() throws Exception {
             byte[] zip = {0x50, 0x4B, 0x03, 0x04, 0x11, 0x22};
-            doReturn(ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .body(zip))
-                    .when(qrdaAggregationService)
-                    .generateQrdaIIISummary(any(), anyString(), anyString());
+            when(qrdaAggregationService.generateQrdaIIISummary(any(), anyString(), anyString()))
+                    .thenReturn(ResponseEntity.ok()
+                            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                            .body(zip));
 
             byte[] body = mockMvc.perform(post(SUMMARY_URL)
                             .contentType(MediaType.APPLICATION_JSON)
@@ -79,8 +77,8 @@ class QRDAIIIControllerTest {
         @Test
         @DisplayName("/import still returns its raw map, not the envelope")
         void importReturnsRawMap() throws Exception {
-            doReturn(ResponseEntity.ok(Map.of("totalFiles", 3, "uploaded", 2)))
-                    .when(qrdaAggregationService).importC2Patients(any());
+            when(qrdaAggregationService.importC2Patients(any()))
+                    .thenReturn(ResponseEntity.ok(Map.of("totalFiles", 3, "uploaded", 2)));
 
             mockMvc.perform(multipart(IMPORT_URL)
                             .file(new MockMultipartFile("file", "patients.zip",

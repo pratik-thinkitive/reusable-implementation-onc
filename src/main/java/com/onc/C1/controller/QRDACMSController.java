@@ -33,19 +33,17 @@ public class QRDACMSController extends BaseController {
 
     /** Binary: a ZIP of one document per requested patient. */
     @PostMapping("/zip")
-    public ResponseEntity<?> generateQrdaZip(@RequestBody List<String> fhirIds) throws IOException {
+    public ResponseEntity<byte[]> generateQrdaZip(@RequestBody List<String> fhirIds) throws IOException {
         return qrdacmsService.generateQrdaZip(fhirIds);
     }
 
     @GetMapping("/medical-details")
-    public ResponseEntity<ApiResponse<MedicalDetailsData>> fetchPatientMedicalDetails(
-            @RequestParam String fhirId) {
+    public ResponseEntity<ApiResponse<MedicalDetailsData>> fetchPatientMedicalDetails(@RequestParam String fhirId) {
         return data(qrdacmsService.fetchPatientMedicalDetails(fhirId));
     }
 
     @GetMapping("/personal-details")
-    public ResponseEntity<ApiResponse<PersonalDetailsData>> fetchPatientPersonalDetails(
-            @RequestParam String fhirId) {
+    public ResponseEntity<ApiResponse<PersonalDetailsData>> fetchPatientPersonalDetails(@RequestParam String fhirId) {
         return data(qrdacmsService.fetchPatientPersonalDetails(fhirId));
     }
 
@@ -55,15 +53,12 @@ public class QRDACMSController extends BaseController {
     }
 
     @GetMapping("/insurance-details")
-    public ResponseEntity<ApiResponse<List<InsuranceDetails>>> fetchPatientInsuranceDetails(
-            @RequestParam String fhirId) {
+    public ResponseEntity<ApiResponse<List<InsuranceDetails>>> fetchPatientInsuranceDetails(@RequestParam String fhirId) {
         return data(qrdacmsService.fetchPatientInsuranceDetails(fhirId));
     }
 
     @GetMapping("/appointment-details")
-    public ResponseEntity<ApiResponse<AppointmentData>> fetchAppointments(
-            @RequestParam String fhirId,
-            @RequestParam(required = false) String clinicId) {
+    public ResponseEntity<ApiResponse<AppointmentData>> fetchAppointments(@RequestParam String fhirId, @RequestParam(required = false) String clinicId) {
         return data(qrdacmsService.fetchAppointments(fhirId, clinicId));
     }
 

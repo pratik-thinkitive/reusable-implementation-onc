@@ -172,7 +172,7 @@ public class QRDACMSServiceImpl implements QRDACMSService {
     }
 
     @Override
-    public ResponseEntity<?> generateQrdaZip(List<String> fhirIds) throws IOException {
+    public ResponseEntity<byte[]> generateQrdaZip(List<String> fhirIds) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ZipOutputStream zos = new ZipOutputStream(baos)) {
             for (String singlePatientId : fhirIds) {

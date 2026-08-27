@@ -66,7 +66,7 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
     private final PatientSummaryService patientSummaryService;
 
     @Override
-    public ResponseEntity<?> importC2Patients(MultipartFile zipFile) {
+    public ResponseEntity<Map<String, Object>> importC2Patients(MultipartFile zipFile) {
         try {
             return ResponseEntity.ok(processPatientZip(zipFile));
         } catch (IOException e) {
@@ -75,7 +75,7 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
     }
 
     @Override
-    public ResponseEntity<?> generateQrdaIIISummary(List<String> patientIds, String measurementPeriodStart, String measurementPeriodEnd) {
+    public ResponseEntity<byte[]> generateQrdaIIISummary(List<String> patientIds, String measurementPeriodStart, String measurementPeriodEnd) {
             if (CollectionUtils.isEmpty(patientIds)) {
                 throw new AppException(ResponseCode.BAD_REQUEST, "Patient ID list cannot be empty");
             }

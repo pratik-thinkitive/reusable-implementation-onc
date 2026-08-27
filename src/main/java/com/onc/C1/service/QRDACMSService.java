@@ -31,5 +31,5 @@ public interface QRDACMSService {
 
     String getQrdaXml(String fhirId);
 
-    ResponseEntity<?> generateQrdaZip(List<String> fhirIds) throws IOException;
+    ResponseEntity<byte[]> generateQrdaZip(List<String> fhirIds) throws IOException;
 }
