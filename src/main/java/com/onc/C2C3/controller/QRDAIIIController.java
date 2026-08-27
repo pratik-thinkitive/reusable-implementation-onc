@@ -23,7 +23,7 @@ public class QRDAIIIController {
         return qrdaAggregationService.importC2Patients(zipFile);
     }
 
-    @PostMapping(value = "/summary", produces = "application/zip")
+    @PostMapping("/summary")
     public ResponseEntity<?> generateC2Summary(@RequestBody List<String> patientIds,
                                                @RequestParam("measurementPeriodStart") String measurementPeriodStart,
                                                @RequestParam("measurementPeriodEnd") String measurementPeriodEnd) {

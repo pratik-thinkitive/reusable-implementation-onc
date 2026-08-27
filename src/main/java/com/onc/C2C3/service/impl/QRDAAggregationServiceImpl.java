@@ -1,5 +1,7 @@
 package com.onc.C2C3.service.impl;
 
+import com.onc.api.support.ResponseCode;
+import com.onc.common.exception.AppException;
 import com.onc.C2C3.dto.PatientMeasureData;
 import com.onc.EHR.service.EHRTokenService;
 import com.onc.EHR.dto.*;
@@ -66,26 +68,23 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
     @Override
     public ResponseEntity<?> importC2Patients(MultipartFile zipFile) {
         try {
-            Map<String, Object> importResult = processPatientZip(zipFile);
-            return ResponseEntity.ok(importResult);
-        } catch (Exception e) {
-            log.error("Error processing C2 ZIP: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Failed to process ZIP", "message", e.getMessage()));
+            return ResponseEntity.ok(processPatientZip(zipFile));
+        } catch (IOException e) {
+            throw new AppException(ResponseCode.BAD_REQUEST, "Failed to process ZIP", e);
         }
     }
 
     @Override
     public ResponseEntity<?> generateQrdaIIISummary(List<String> patientIds, String measurementPeriodStart, String measurementPeriodEnd) {
-        try {
             if (CollectionUtils.isEmpty(patientIds)) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Patient ID list cannot be empty"));
+                throw new AppException(ResponseCode.BAD_REQUEST, "Patient ID list cannot be empty");
             }
 
             if (measurementPeriodStart == null || measurementPeriodStart.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Measurement period start date is required (format: yyyy-MM-dd)"));
+                throw new AppException(ResponseCode.BAD_REQUEST, "Measurement period start date is required (format: yyyy-MM-dd)");
             }
             if (measurementPeriodEnd == null || measurementPeriodEnd.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Measurement period end date is required (format: yyyy-MM-dd)"));
+                throw new AppException(ResponseCode.BAD_REQUEST, "Measurement period end date is required (format: yyyy-MM-dd)");
             }
 
             LocalDate periodStart;
@@ -94,12 +93,11 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
                 periodStart = LocalDate.parse(measurementPeriodStart);
                 periodEnd = LocalDate.parse(measurementPeriodEnd);
             } catch (Exception e) {
-                return ResponseEntity.badRequest().body(Map.of("message", "Invalid date format. Expected format: yyyy-MM-dd (e.g., 2024-01-01)", "error", e.getMessage()));
+                throw new AppException(ResponseCode.BAD_REQUEST, "Invalid date format. Expected format: yyyy-MM-dd (e.g., 2024-01-01)", e);
             }
 
             if (periodStart.isAfter(periodEnd)) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("message", "Measurement period start date must be before or equal to end date"));
+                throw new AppException(ResponseCode.BAD_REQUEST, "Measurement period start date must be before or equal to end date");
             }
 
             log.info("Starting QRDA-III summary generation for {} patient IDs with measurement period: {} to {}", 
@@ -143,8 +141,7 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
 
             if (CollectionUtils.isEmpty(patients)) {
                 log.error("No valid patient data found for summary generation");
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("message", "No valid patient data found for summary generation"));
+                throw new AppException(ResponseCode.NOT_FOUND, "No valid patient data found for summary generation");
             }
 
             // Step 2: Calculate measures for each patient
@@ -204,19 +201,20 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
             log.info("Numerator (NUMER)       : {}", numer);
             log.info("=========================================");
 
-            byte[] zipBytes = generateQrdaIII(patients, doctorDetails, measurementPeriodStart, measurementPeriodEnd);
+            // generateQrdaIII declares checked Exception. Rethrowing unchecked, rather than as an
+            // AppException, keeps the caller on the handler's generic 500 with the cause logged.
+            byte[] zipBytes;
+            try {
+                zipBytes = generateQrdaIII(patients, doctorDetails, measurementPeriodStart, measurementPeriodEnd);
+            } catch (Exception e) {
+                throw new IllegalStateException("QRDA-III generation failed", e);
+            }
             log.info("QRDA-III summary generation completed successfully. ZIP size: {} bytes", zipBytes.length);
 
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=qrda-iii-summary.zip")
                     .contentType(MediaType.APPLICATION_OCTET_STREAM)
                     .body(zipBytes);
-
-        } catch (Exception e) {
-            log.error("Error generating QRDA-III Summary: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
-        }
     }
 
     /**
