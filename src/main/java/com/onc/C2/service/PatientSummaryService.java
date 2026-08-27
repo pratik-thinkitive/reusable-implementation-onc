@@ -32,6 +32,14 @@ public class PatientSummaryService {
     private final ObjectMapper objectMapper;
     private final EHRTokenService ehrTokenService;
 
+    /** The authenticated GET entity every read in this service shares. */
+    private HttpEntity<Void> authorizedRequest() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(ehrTokenService.getAccessToken());
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+        return new HttpEntity<>(headers);
+    }
+
     /**
      * Fetch patient data from EHR and convert to PatientMeasureData
      */
@@ -40,21 +48,25 @@ public class PatientSummaryService {
             PatientMeasureData patientMeasureData = new PatientMeasureData();
             patientMeasureData.setPatientId(patientId);
 
+            // One token for this patient's reads. Each fetch used to mint its own, so a single
+            // patient cost four password-grant round trips before any data was fetched.
+            HttpEntity<Void> request = authorizedRequest();
+
             // Fetch personal details (matches QRDA package approach)
-            PersonalDetailsData personalDetails = fetchPersonalDetails(patientId);
+            PersonalDetailsData personalDetails = fetchPersonalDetails(patientId, request);
             patientMeasureData.setPersonalDetailsData(personalDetails);
 
             // Fetch insurance details (matches QRDA package approach)
-            List<InsuranceDetails> insuranceDetails = fetchInsuranceDetails(patientId);
+            List<InsuranceDetails> insuranceDetails = fetchInsuranceDetails(patientId, request);
             patientMeasureData.setInsuranceDetails(insuranceDetails);
 
             // Fetch appointment data (matches QRDA package approach)
             String clinicId = "762";
-            AppointmentData appointmentData = fetchAppointmentData(patientId, clinicId);
+            AppointmentData appointmentData = fetchAppointmentData(patientId, clinicId, request);
             patientMeasureData.setAppointmentData(appointmentData);
 
             // Fetch SOAP contexts and FormData (matches QRDA package approach - fetchSoapDetails)
-            List<FormData> soapDetails = fetchSoapDetails(patientId);
+            List<FormData> soapDetails = fetchSoapDetails(patientId, request);
             
             // Set clinic ID (already extracted above)
             patientMeasureData.setClinicId(clinicId);
@@ -116,16 +128,10 @@ public class PatientSummaryService {
     /**
      * Fetch personal details from EHR - matches QRDA package approach (fetchPatientPersonalDetails)
      */
-    private PersonalDetailsData fetchPersonalDetails(String patientId) {
+    private PersonalDetailsData fetchPersonalDetails(String patientId, HttpEntity<Void> request) {
         try {
-            String token = ehrTokenService.getAccessToken();
 
             String url = apiBaseUrl + "/personal-details?patient_id=" + patientId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
@@ -153,16 +159,10 @@ public class PatientSummaryService {
     /**
      * Fetch insurance details from EHR - matches QRDA package approach (fetchPatientInsuranceDetails)
      */
-    private List<InsuranceDetails> fetchInsuranceDetails(String patientId) {
+    private List<InsuranceDetails> fetchInsuranceDetails(String patientId, HttpEntity<Void> request) {
         try {
-            String token = ehrTokenService.getAccessToken();
             
             String url = apiBaseUrl + "/insurance/cards?patient_id=" + patientId;
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
 
             if (!response.getStatusCode().is2xxSuccessful()) {
@@ -190,7 +190,7 @@ public class PatientSummaryService {
         }
     }
 
-    private AppointmentData fetchAppointmentData(String patientId, String clinicId) {
+    private AppointmentData fetchAppointmentData(String patientId, String clinicId, HttpEntity<Void> request) {
         try {
             String startDate = "2013-01-01T00:00:00.000Z";
             String endDate = "2035-12-31T00:00:00.000Z";
@@ -209,12 +209,6 @@ public class PatientSummaryService {
 
             log.info("Fetching appointments for patient {} from URL: {} (using QRDA package approach)", patientId, url);
 
-            String token = ehrTokenService.getAccessToken();
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
 
             if (!response.getStatusCode().is2xxSuccessful()) {
@@ -265,20 +259,14 @@ public class PatientSummaryService {
      * Fetch SOAP contexts and FormData from EHR - matches QRDA package approach (fetchSoapDetails)
      * This is the correct way to fetch assessments and interventions
      */
-    private List<FormData> fetchSoapDetails(String patientId) {
+    private List<FormData> fetchSoapDetails(String patientId, HttpEntity<Void> request) {
         try {
             log.info("Patient {} - Starting SOAP details fetch (QRDA package approach)", patientId);
-            String token = ehrTokenService.getAccessToken();
 
             // Step 1: Fetch SOAP contexts
             String soapUrl = apiBaseUrl + "/soap-context?patient_id=" + patientId;
             log.info("Patient {} - Fetching SOAP contexts from: {}", patientId, soapUrl);
             
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
             ResponseEntity<String> soapResponse = restTemplate.exchange(soapUrl, HttpMethod.GET, request, String.class);
 
             log.info("Patient {} - SOAP context API response - Status: {}, Body length: {}", 

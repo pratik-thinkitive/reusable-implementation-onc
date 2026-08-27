@@ -151,7 +151,8 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
             log.info("Evaluating C2 measures for {} patients with measurement period: {} to {}", 
                     patients.size(), measurementPeriodStart, measurementPeriodEnd);
             patients.forEach(patient -> {
-                MeasureEvaluator.extractEncounters(patient);
+                // Encounters were already extracted by PatientSummaryService from the same
+                // appointment data, and extractEncounters replaces rather than appends.
                 MeasureEvaluator.evaluateC2Measure(patient, measurementPeriodStart, measurementPeriodEnd);
 
                 // Count assessments and interventions from FormResponse objects
@@ -246,9 +247,10 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
         DoctorDetailsData extractedProvider = null;
         Integer createdDoctorId = null;
         
+        // The provider comes from the first document only. Stop after it rather than
+        // decompressing every remaining entry into a buffer this pass never reads.
         try (ZipInputStream zipInputStream = new ZipInputStream(zipFile.getInputStream())) {
             ZipEntry entry;
-            boolean firstFile = true;
 
             while ((entry = zipInputStream.getNextEntry()) != null) {
                 if (entry.isDirectory() || !entry.getName().endsWith(".xml")) continue;
@@ -256,32 +258,30 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 zipInputStream.transferTo(baos);
 
-                if (firstFile) {
-                    // Extract provider details from first QRDA file
-                    try (InputStream xmlStream = new ByteArrayInputStream(baos.toByteArray())) {
-                        log.info("Extracting provider details from first file: {}", entry.getName());
-                        QRDAExtractionServiceImpl.ExtractedProviderDetails parsedProvider = extractionService.extractProviderDetails(xmlStream);
-                        extractedProvider = parsedProvider.getProviderDetails();
-                        log.info("Extracted provider details - NPI: {}, TIN: {}, CCN: {}, Name: {} {}",
-                                extractedProvider.getNpi(), extractedProvider.getTax_id_number(),
-                                extractedProvider.getCms_certificate_number(),
-                                extractedProvider.getFirst_name(), extractedProvider.getLast_name());
-                    } catch (Exception e) {
-                        log.error("Error extracting provider details from first file: {}", e.getMessage(), e);
+                // Extract provider details from first QRDA file
+                try (InputStream xmlStream = new ByteArrayInputStream(baos.toByteArray())) {
+                    log.info("Extracting provider details from first file: {}", entry.getName());
+                    QRDAExtractionServiceImpl.ExtractedProviderDetails parsedProvider = extractionService.extractProviderDetails(xmlStream);
+                    extractedProvider = parsedProvider.getProviderDetails();
+                    log.info("Extracted provider details - NPI: {}, TIN: {}, CCN: {}, Name: {} {}",
+                            extractedProvider.getNpi(), extractedProvider.getTax_id_number(),
+                            extractedProvider.getCms_certificate_number(),
+                            extractedProvider.getFirst_name(), extractedProvider.getLast_name());
+                } catch (Exception e) {
+                    log.error("Error extracting provider details from first file: {}", e.getMessage(), e);
+                }
+
+                if (extractedProvider != null) {
+                    createdDoctorId = createProvider(extractedProvider);
+                    if (createdDoctorId != null) {
+                        log.info("Successfully created provider with doctor ID: {}", createdDoctorId);
+                        // Update provider with TIN, NPI, CCN
+                        updateProviderDetails(createdDoctorId, extractedProvider);
                     }
-                    
-                    if (extractedProvider != null) {
-                        createdDoctorId = createProvider(extractedProvider);
-                        if (createdDoctorId != null) {
-                            log.info("Successfully created provider with doctor ID: {}", createdDoctorId);
-                            // Update provider with TIN, NPI, CCN
-                            updateProviderDetails(createdDoctorId, extractedProvider);
-                        }
-                    }
-                    firstFile = false;
                 }
 
                 zipInputStream.closeEntry();
+                break;
             }
         }
 
@@ -666,31 +666,45 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
         // Levenshtein distance check for misspellings (simple version)
         int maxLength = Math.max(name1.length(), name2.length());
         if (maxLength == 0) return true;
-        
-        int distance = levenshteinDistance(name1, name2);
+
         // If distance is small relative to length, consider similar
-        return distance <= Math.max(2, maxLength / 4);
+        int threshold = Math.max(2, maxLength / 4);
+
+        // Edit distance is never smaller than the length difference, so a pair this far apart
+        // cannot pass the threshold - the same answer, without building the matrix.
+        if (Math.abs(name1.length() - name2.length()) > threshold) {
+            return false;
+        }
+
+        return levenshteinDistance(name1, name2) <= threshold;
     }
 
+    /**
+     * Two rolling rows rather than the full matrix. Each cell only ever reads the row above and
+     * the cell to its left, so the result is identical at O(min(m,n)) memory instead of O(m*n).
+     */
     private int levenshteinDistance(String s1, String s2) {
-        int[][] dp = new int[s1.length() + 1][s2.length() + 1];
-        
-        for (int i = 0; i <= s1.length(); i++) {
-            for (int j = 0; j <= s2.length(); j++) {
-                if (i == 0) {
-                    dp[i][j] = j;
-                } else if (j == 0) {
-                    dp[i][j] = i;
-                } else {
-                    dp[i][j] = Math.min(
-                        Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1),
-                        dp[i - 1][j - 1] + (s1.charAt(i - 1) == s2.charAt(j - 1) ? 0 : 1)
-                    );
-                }
-            }
+        int[] previous = new int[s2.length() + 1];
+        int[] current = new int[s2.length() + 1];
+
+        for (int j = 0; j <= s2.length(); j++) {
+            previous[j] = j;
         }
-        
-        return dp[s1.length()][s2.length()];
+
+        for (int i = 1; i <= s1.length(); i++) {
+            current[0] = i;
+            for (int j = 1; j <= s2.length(); j++) {
+                current[j] = Math.min(
+                        Math.min(previous[j] + 1, current[j - 1] + 1),
+                        previous[j - 1] + (s1.charAt(i - 1) == s2.charAt(j - 1) ? 0 : 1)
+                );
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+
+        return previous[s2.length()];
     }
 
     private boolean areDOBSimilar(String dob1, String dob2) {
@@ -1046,8 +1060,10 @@ public class QRDAAggregationServiceImpl implements QRDAAggregationService {
 
     private void uploadPersonalDetailsForm(PersonalDetailsData personalDetails, String patientId, 
                                           String clinicId, HttpHeaders headers, Map<String, Object> result) {
-        String submissionId = getSubmissionIdByPatientId(patientId);
-        String digestDefinitionId = getDigestDefinitionIdByPatientId(patientId);
+        // Both ids come out of the same payload, so read it once rather than calling twice.
+        Map<String, String> personalDetailsInfo = getPersonalDetailsInfo(patientId);
+        String submissionId = personalDetailsInfo != null ? personalDetailsInfo.get("submissionId") : null;
+        String digestDefinitionId = personalDetailsInfo != null ? personalDetailsInfo.get("digestDefinitionId") : null;
         String personalDetailsApiUrl = apiBaseUrl + "/personal-details/" + submissionId ;
         
         try {
